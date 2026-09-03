@@ -107,6 +107,10 @@ public class GeigerManager {
         }
     }
 
+    public JavaPlugin getPlugin() {
+        return plugin;
+    }
+
     public GeigerClickPlayer getClickPlayer() {
         return clickPlayer;
     }

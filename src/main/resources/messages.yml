@@ -30,7 +30,7 @@ player:
 # ====================================
 admin:
   # /geiger with no arguments, or an unknown subcommand
-  usage: "&eUsage: /geiger <locate|move [x z]|limits <player>|resetlimits <player>|reload>"
+  usage: "&eUsage: /geiger <locate|move [x z]|limits <player>|resetlimits <player>|droplist [name]|reload>"
 
   # /geiger locate
   # %x% %z% = source coordinates, %world% = world name
@@ -63,6 +63,13 @@ admin:
   # Any subcommand given a name nobody on this server has used
   # %player% = the name that was typed
   unknown-player: "&cUnknown player: %player%"
+
+  # /geiger droplist [name]
+  droplist-usage: "&cUsage: /geiger droplist [name]"
+  # %list% = active list, %lists% = every list in config.yml
+  droplist-current: "&aActive drop list: &f%list% &7(available: %lists%)"
+  droplist-unknown: "&cNo drop list named '%list%'. Available: %lists%"
+  droplist-changed: "&aDrop list switched to &f%list%&a."
 
   # /geiger reload
   reloaded: "&aGeiger Counter configuration reloaded."

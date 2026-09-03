@@ -35,7 +35,8 @@ public class ConfigMigrator {
     // v2: sound + limits sections
     // v3: messages moved out to messages.yml
     // v4: messages.yml split into player/admin sections
-    public static final int CURRENT_VERSION = 4;
+    // v5: drops.tiers -> drops.lists.<name>.tiers, selected by drops.active-list
+    public static final int CURRENT_VERSION = 5;
 
     public static final String MESSAGES_FILE = "messages.yml";
 
@@ -79,10 +80,12 @@ public class ConfigMigrator {
             return;
         }
 
+        boolean movedDropList = migrateDropLists(live);
+
         List<String> addedKeys = copyMissingKeys(packaged, live);
         boolean versionChanged = liveVersion != CURRENT_VERSION;
 
-        if (addedKeys.isEmpty() && !versionChanged) {
+        if (addedKeys.isEmpty() && !versionChanged && !movedDropList) {
             return;
         }
 
@@ -184,6 +187,29 @@ public class ConfigMigrator {
         } catch (IOException e) {
             plugin.getLogger().warning("Failed to save " + MESSAGES_FILE + ": " + e.getMessage());
         }
+    }
+
+    // ====================================
+    // Move the single drops.tiers list into drops.lists.default.
+    //
+    // Runs before the default merge: lists count as leaves there, so once the
+    // admin's tiers sit under default the packaged default list is skipped
+    // and their items survive the upgrade.
+    // ====================================
+    private boolean migrateDropLists(FileConfiguration live) {
+        ConfigurationSection oldTiers = live.getConfigurationSection("drops.tiers");
+        if (oldTiers == null || live.isConfigurationSection("drops.lists")) {
+            return false;
+        }
+
+        for (String tier : oldTiers.getKeys(false)) {
+            live.set("drops.lists.default.tiers." + tier, oldTiers.get(tier));
+        }
+        live.set("drops.active-list", "default");
+        live.set("drops.tiers", null);
+
+        plugin.getLogger().info("Moved drops.tiers to drops.lists.default and set drops.active-list to 'default'.");
+        return true;
     }
 
     // ====================================

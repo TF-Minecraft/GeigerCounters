@@ -1,7 +1,7 @@
 # Config version - do not edit.
 # The plugin uses it to add newly introduced keys on upgrade; your own values
 # are kept, and the previous file is backed up as config-v<n>.yml.bak first.
-config-version: 2
+config-version: 5
 
 # ====================================
 # Source location settings
@@ -165,94 +165,191 @@ drops:
     legendary: 2.5  # 2.5% chance
     mythical: 0.5   # 0.5% chance
   
+  # Which list under drops.lists is in use.
+  # Switch in-game with /geiger droplist <name> - it saves here and reloads.
+  active-list: default
+
+  # Named drop lists - add as many as you like, names are free-form.
   # Items in each rarity tier
   # Format: "item_path:amount"
   # Example: m.MATERIALS.ARCANE_DUST:5
-  tiers:
-    common:
-      - "m.FOODS.SAUSAGE:32"
-      - "m.FOODS.SAUSAGE:32"
-      - "m.FOODS.GRAIN_BREAD:32"
-      - "m.FOODS.GRAIN_BREAD:32"
-      - "m.FOODS.JAMON:32"
-      - "m.FOODS.JAMON:32"
+  lists:
+    default:
+      tiers:
+        common:
+          - "m.FOODS.SAUSAGE:32"
+          - "m.FOODS.SAUSAGE:32"
+          - "m.FOODS.GRAIN_BREAD:32"
+          - "m.FOODS.GRAIN_BREAD:32"
+          - "m.FOODS.JAMON:32"
+          - "m.FOODS.JAMON:32"
 
-      - "m.MATERIALS.RAW_TIN:4"
-      - "m.MATERIALS.RAW_TIN:4"
-      - "m.MATERIALS.RAW_TIN:8"
+          - "m.MATERIALS.RAW_TIN:4"
+          - "m.MATERIALS.RAW_TIN:4"
+          - "m.MATERIALS.RAW_TIN:8"
 
-      - "v.raw_iron_block:32"
-      - "v.raw_iron_block:32"
+          - "v.raw_iron_block:32"
+          - "v.raw_iron_block:32"
 
-    uncommon:
-      - "m.MATERIALS.RAW_TIN:12"
+        uncommon:
+          - "m.MATERIALS.RAW_TIN:12"
 
-      - "m.MATERIALS.ABYSSALITE_FRAGMENT:4"
-      - "m.MATERIALS.ABYSSALITE_FRAGMENT:4"
-      - "m.MATERIALS.ABYSSALITE_FRAGMENT:8"
+          - "m.MATERIALS.ABYSSALITE_FRAGMENT:4"
+          - "m.MATERIALS.ABYSSALITE_FRAGMENT:4"
+          - "m.MATERIALS.ABYSSALITE_FRAGMENT:8"
 
-      - "m.MATERIALS.MYTHRIL_FRAGMENT:2"
-      - "m.MATERIALS.MYTHRIL_FRAGMENT:2"
+          - "m.MATERIALS.MYTHRIL_FRAGMENT:2"
+          - "m.MATERIALS.MYTHRIL_FRAGMENT:2"
 
-      - "m.CONSUMABLES.WEAK_REPAIR_KIT:1"
-      - "m.CONSUMABLES.TOOL_REPAIR_KIT:1"
+          - "m.CONSUMABLES.WEAK_REPAIR_KIT:1"
+          - "m.CONSUMABLES.TOOL_REPAIR_KIT:1"
 
-      - "m.RESEARCH.LOST_KNOWLEDGE_SCRAP:1"
+          - "m.RESEARCH.LOST_KNOWLEDGE_SCRAP:1"
 
-    rare:
-      - "m.MATERIALS.ABYSSALITE_FRAGMENT:12"
+        rare:
+          - "m.MATERIALS.ABYSSALITE_FRAGMENT:12"
 
-      - "m.MATERIALS.MYTHRIL_FRAGMENT:3"
-      - "m.MATERIALS.MYTHRIL_FRAGMENT:4"
+          - "m.MATERIALS.MYTHRIL_FRAGMENT:3"
+          - "m.MATERIALS.MYTHRIL_FRAGMENT:4"
 
-      - "m.MATERIALS.MYTHRILITE:1"
-      - "m.MATERIALS.MYTHRILITE:1"
+          - "m.MATERIALS.MYTHRILITE:1"
+          - "m.MATERIALS.MYTHRILITE:1"
 
-      - "v.raw_iron_block:64"
+          - "v.raw_iron_block:64"
 
-      - "m.CONSUMABLES.MEDIUM_REPAIR_KIT:1"
+          - "m.CONSUMABLES.MEDIUM_REPAIR_KIT:1"
 
-      - "m.RESEARCH.LOST_KNOWLEDGE_SCRAP:1"
-      - "m.RESEARCH.LOST_KNOWLEDGE_SCRAP:1"
+          - "m.RESEARCH.LOST_KNOWLEDGE_SCRAP:1"
+          - "m.RESEARCH.LOST_KNOWLEDGE_SCRAP:1"
 
-    epic:
-      - "m.MATERIALS.MYTHRILITE:2"
-      - "m.MATERIALS.MYTHRILITE:2"
+        epic:
+          - "m.MATERIALS.MYTHRILITE:2"
+          - "m.MATERIALS.MYTHRILITE:2"
 
-      - "m.CONSUMABLES.STRONG_REPAIR_KIT:1"
+          - "m.CONSUMABLES.STRONG_REPAIR_KIT:1"
 
-      - "m.LOOT.TRIAL_KEY:1"
-      - "m.LOOT.TRIAL_KEY:1"
-      - "m.LOOT.TRIAL_KEY:1"
-      - "m.LOOT.TRIAL_KEY:1"
+          - "m.LOOT.TRIAL_KEY:1"
+          - "m.LOOT.TRIAL_KEY:1"
+          - "m.LOOT.TRIAL_KEY:1"
+          - "m.LOOT.TRIAL_KEY:1"
 
-      - "m.LOOT.SWORD_RUNESTONE:1"
-      - "m.LOOT.WAND_RUNESTONE:1"
-      - "m.LOOT.STAFF_RUNESTONE:1"
-      - "m.LOOT.ARMOR_RUNESTONE:1"
+          - "m.LOOT.SWORD_RUNESTONE:1"
+          - "m.LOOT.WAND_RUNESTONE:1"
+          - "m.LOOT.STAFF_RUNESTONE:1"
+          - "m.LOOT.ARMOR_RUNESTONE:1"
 
-    legendary:
-      - "m.MATERIALS.LEGENDARY_LEATHER:1"
-      - "m.MATERIALS.LEGENDARY_FEATHER:1"
-      - "m.MATERIALS.LEGENDARY_WOOL:1"
+        legendary:
+          - "m.MATERIALS.LEGENDARY_LEATHER:1"
+          - "m.MATERIALS.LEGENDARY_FEATHER:1"
+          - "m.MATERIALS.LEGENDARY_WOOL:1"
 
-      - "m.MATERIALS.LEGENDARY_LEATHER:2"
-      - "m.MATERIALS.LEGENDARY_FEATHER:2"
-      - "m.MATERIALS.LEGENDARY_WOOL:2"
+          - "m.MATERIALS.LEGENDARY_LEATHER:2"
+          - "m.MATERIALS.LEGENDARY_FEATHER:2"
+          - "m.MATERIALS.LEGENDARY_WOOL:2"
 
-      - "m.CONSUMABLES.MAGIC_REPAIR_KIT:1"
-      - "m.CONSUMABLES.MAGIC_REPAIR_KIT:1"
-      - "m.CONSUMABLES.MAGIC_REPAIR_KIT:1"
+          - "m.CONSUMABLES.MAGIC_REPAIR_KIT:1"
+          - "m.CONSUMABLES.MAGIC_REPAIR_KIT:1"
+          - "m.CONSUMABLES.MAGIC_REPAIR_KIT:1"
 
-      - "m.LOOT.BASIC_GEMSTONE_POUCH:1"
-      - "m.LOOT.POLISHED_GEMSTONE_POUCH:1"
+          - "m.LOOT.BASIC_GEMSTONE_POUCH:1"
+          - "m.LOOT.POLISHED_GEMSTONE_POUCH:1"
 
-    mythical:
-      - "m.LOOT.EPIC_ITEM_SKIN_SCROLL:1"
-      - "m.LOOT.LEGENDARY_ITEM_SKIN_SCROLL:1"
+        mythical:
+          - "m.LOOT.EPIC_ITEM_SKIN_SCROLL:1"
+          - "m.LOOT.LEGENDARY_ITEM_SKIN_SCROLL:1"
 
-      - "m.LOOT.RADIANT_GEMSTONE_POUCH:1"
-      - "m.LOOT.MYTHICAL_GEMSTONE_POUCH:1"
+          - "m.LOOT.RADIANT_GEMSTONE_POUCH:1"
+          - "m.LOOT.MYTHICAL_GEMSTONE_POUCH:1"
 
-      - "m.LOOT.RARE_MATERIAL_POUCH:1"
-      - "m.CURRENCY.POUCH_OF_COINS:1"
+          - "m.LOOT.RARE_MATERIAL_POUCH:1"
+          - "m.CURRENCY.POUCH_OF_COINS:1"
+
+    event:
+      tiers:
+        common:
+          - "m.FOODS.SAUSAGE:32"
+          - "m.FOODS.SAUSAGE:32"
+          - "m.FOODS.GRAIN_BREAD:32"
+          - "m.FOODS.GRAIN_BREAD:32"
+          - "m.FOODS.JAMON:32"
+          - "m.FOODS.JAMON:32"
+
+          - "m.MATERIALS.RAW_TIN:4"
+          - "m.MATERIALS.RAW_TIN:4"
+          - "m.MATERIALS.RAW_TIN:8"
+
+          - "v.raw_iron_block:32"
+          - "v.raw_iron_block:32"
+
+        uncommon:
+          - "m.MATERIALS.RAW_TIN:12"
+
+          - "m.MATERIALS.ABYSSALITE_FRAGMENT:4"
+          - "m.MATERIALS.ABYSSALITE_FRAGMENT:4"
+          - "m.MATERIALS.ABYSSALITE_FRAGMENT:8"
+
+          - "m.MATERIALS.MYTHRIL_FRAGMENT:2"
+          - "m.MATERIALS.MYTHRIL_FRAGMENT:2"
+
+          - "m.CONSUMABLES.WEAK_REPAIR_KIT:1"
+          - "m.CONSUMABLES.TOOL_REPAIR_KIT:1"
+
+          - "m.RESEARCH.LOST_KNOWLEDGE_SCRAP:1"
+
+        rare:
+          - "m.MATERIALS.ABYSSALITE_FRAGMENT:12"
+
+          - "m.MATERIALS.MYTHRIL_FRAGMENT:3"
+          - "m.MATERIALS.MYTHRIL_FRAGMENT:4"
+
+          - "m.MATERIALS.MYTHRILITE:1"
+          - "m.MATERIALS.MYTHRILITE:1"
+
+          - "v.raw_iron_block:64"
+
+          - "m.CONSUMABLES.MEDIUM_REPAIR_KIT:1"
+
+          - "m.RESEARCH.LOST_KNOWLEDGE_SCRAP:1"
+          - "m.RESEARCH.LOST_KNOWLEDGE_SCRAP:1"
+
+        epic:
+          - "m.MATERIALS.MYTHRILITE:2"
+          - "m.MATERIALS.MYTHRILITE:2"
+
+          - "m.CONSUMABLES.STRONG_REPAIR_KIT:1"
+
+          - "m.LOOT.TRIAL_KEY:1"
+          - "m.LOOT.TRIAL_KEY:1"
+          - "m.LOOT.TRIAL_KEY:1"
+          - "m.LOOT.TRIAL_KEY:1"
+
+          - "m.LOOT.SWORD_RUNESTONE:1"
+          - "m.LOOT.WAND_RUNESTONE:1"
+          - "m.LOOT.STAFF_RUNESTONE:1"
+          - "m.LOOT.ARMOR_RUNESTONE:1"
+
+        legendary:
+          - "m.MATERIALS.LEGENDARY_LEATHER:1"
+          - "m.MATERIALS.LEGENDARY_FEATHER:1"
+          - "m.MATERIALS.LEGENDARY_WOOL:1"
+
+          - "m.MATERIALS.LEGENDARY_LEATHER:2"
+          - "m.MATERIALS.LEGENDARY_FEATHER:2"
+          - "m.MATERIALS.LEGENDARY_WOOL:2"
+
+          - "m.CONSUMABLES.MAGIC_REPAIR_KIT:1"
+          - "m.CONSUMABLES.MAGIC_REPAIR_KIT:1"
+          - "m.CONSUMABLES.MAGIC_REPAIR_KIT:1"
+
+          - "m.LOOT.BASIC_GEMSTONE_POUCH:1"
+          - "m.LOOT.POLISHED_GEMSTONE_POUCH:1"
+
+        mythical:
+          - "m.LOOT.EPIC_ITEM_SKIN_SCROLL:1"
+          - "m.LOOT.LEGENDARY_ITEM_SKIN_SCROLL:1"
+
+          - "m.LOOT.RADIANT_GEMSTONE_POUCH:1"
+          - "m.LOOT.MYTHICAL_GEMSTONE_POUCH:1"
+
+          - "m.LOOT.RARE_MATERIAL_POUCH:1"
+          - "m.CURRENCY.POUCH_OF_COINS:1"

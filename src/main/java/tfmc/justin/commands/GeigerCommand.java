@@ -18,11 +18,11 @@ import java.util.Arrays;
 import java.util.List;
 
 // ====================================
-// Admin command handler: /geiger <locate|move [x z]|limits [player]|resetlimits <player>|reload>
+// Admin command handler: /geiger <locate|move [x z]|limits [player]|resetlimits <player>|droplist [name]|reload>
 // ====================================
 public class GeigerCommand implements CommandExecutor, TabCompleter {
 
-    private static final List<String> SUBCOMMANDS = Arrays.asList("locate", "move", "limits", "resetlimits", "reload");
+    private static final List<String> SUBCOMMANDS = Arrays.asList("locate", "move", "limits", "resetlimits", "droplist", "reload");
 
     private final GeigerManager manager;
 
@@ -57,6 +57,9 @@ public class GeigerCommand implements CommandExecutor, TabCompleter {
             case "resetlimit":
             case "resetlimits":
                 handleResetLimits(sender, args);
+                return true;
+            case "droplist":
+                handleDropList(sender, args);
                 return true;
             case "reload":
                 handleReload(sender);
@@ -182,6 +185,39 @@ public class GeigerCommand implements CommandExecutor, TabCompleter {
         return target;
     }
 
+    // /geiger droplist        -> which list is active, and which exist
+    // /geiger droplist <name> -> switch to that list, saved to config.yml
+    private void handleDropList(CommandSender sender, String[] args) {
+        GeigerConfiguration config = manager.getConfiguration();
+        String available = String.join(", ", config.getDropListNames());
+
+        if (args.length == 1) {
+            sender.sendMessage(messages().get("admin.droplist-current",
+                "%list%", config.getActiveDropList(),
+                "%lists%", available));
+            return;
+        }
+
+        if (args.length != 2) {
+            sender.sendMessage(messages().get("admin.droplist-usage"));
+            return;
+        }
+
+        String name = args[1];
+        if (!config.getDropListNames().contains(name)) {
+            sender.sendMessage(messages().get("admin.droplist-unknown",
+                "%list%", name,
+                "%lists%", available));
+            return;
+        }
+
+        manager.getPlugin().getConfig().set("drops.active-list", name);
+        manager.getPlugin().saveConfig();
+        manager.reload();
+
+        sender.sendMessage(messages().get("admin.droplist-changed", "%list%", name));
+    }
+
     private void handleReload(CommandSender sender) {
         manager.reload();
         sender.sendMessage(messages().get("admin.reloaded"));
@@ -245,6 +281,17 @@ public class GeigerCommand implements CommandExecutor, TabCompleter {
         // Coordinates for /geiger move <x> <z>
         if (args[0].equalsIgnoreCase("move") && (args.length == 2 || args.length == 3)) {
             return completeCoordinate(sender, args);
+        }
+
+        // Drop list names for /geiger droplist <name>
+        if (args.length == 2 && args[0].equalsIgnoreCase("droplist")) {
+            List<String> matches = new ArrayList<>();
+            for (String name : manager.getConfiguration().getDropListNames()) {
+                if (name.toLowerCase().startsWith(args[1].toLowerCase())) {
+                    matches.add(name);
+                }
+            }
+            return matches;
         }
 
         // Both limit subcommands (either spelling) take a player name

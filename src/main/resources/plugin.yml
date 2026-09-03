@@ -8,7 +8,7 @@ softdepend: [WorldGuard]
 commands:
   geiger:
     description: Geiger Counter admin commands
-    usage: /geiger <locate|move [x z]|limits <player>|resetlimits <player>|reload>
+    usage: /geiger <locate|move [x z]|limits <player>|resetlimits <player>|droplist [name]|reload>
     permission: geiger.admin
 permissions:
   geiger.admin:

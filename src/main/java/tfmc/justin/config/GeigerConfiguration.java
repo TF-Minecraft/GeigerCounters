@@ -80,6 +80,8 @@ public class GeigerConfiguration {
     private ColorConfig farRangeEndColor;
     
     // Rewards
+    private String activeDropList;
+    private final List<String> dropListNames = new ArrayList<>();
     private final List<TierReward> tierRewards = new ArrayList<>();
     
     public GeigerConfiguration(JavaPlugin plugin) {
@@ -282,29 +284,48 @@ public class GeigerConfiguration {
     // ====================================
     private void loadRewards() {
         tierRewards.clear();
-        
+        dropListNames.clear();
+
         // Load tier weights
         ConfigurationSection weightsSection = plugin.getConfig().getConfigurationSection("drops.tier-weights");
         if (weightsSection == null) {
             plugin.getLogger().warning("No tier-weights section found in config!");
             return;
         }
-        
-        // Load tiers section
-        ConfigurationSection tiersSection = plugin.getConfig().getConfigurationSection("drops.tiers");
-        if (tiersSection == null) {
-            plugin.getLogger().warning("No tiers section found in config!");
+
+        // Several named lists live under drops.lists; drops.active-list picks one
+        ConfigurationSection listsSection = plugin.getConfig().getConfigurationSection("drops.lists");
+        if (listsSection == null) {
+            plugin.getLogger().warning("No drops.lists section found in config!");
             return;
         }
-        
+        dropListNames.addAll(listsSection.getKeys(false));
+
+        activeDropList = plugin.getConfig().getString("drops.active-list", "default");
+        if (!listsSection.isConfigurationSection(activeDropList)) {
+            if (dropListNames.isEmpty()) {
+                plugin.getLogger().warning("drops.lists has no drop lists in it!");
+                return;
+            }
+            String fallback = dropListNames.get(0);
+            plugin.getLogger().warning("Drop list '" + activeDropList + "' not found in drops.lists - using '" + fallback + "' instead.");
+            activeDropList = fallback;
+        }
+
+        ConfigurationSection tiersSection = listsSection.getConfigurationSection(activeDropList + ".tiers");
+        if (tiersSection == null) {
+            plugin.getLogger().warning("Drop list '" + activeDropList + "' has no tiers section!");
+            return;
+        }
+
         // Process each tier
         String[] tierNames = {"common", "uncommon", "rare", "epic", "legendary", "mythical"};
         for (String tierName : tierNames) {
             double weight = weightsSection.getDouble(tierName, 0.0);
-            
+
             if (weight > 0) {
                 TierReward tier = new TierReward(tierName, weight);
-                
+
                 // Load items for this tier
                 List<String> tierItems = tiersSection.getStringList(tierName);
                 for (String itemString : tierItems) {
@@ -313,17 +334,17 @@ public class GeigerConfiguration {
                         tier.addItem(item);
                     }
                 }
-                
+
                 // Only add tier if it has items
                 if (!tier.isEmpty()) {
                     tierRewards.add(tier);
                 }
             }
         }
-        
-        plugin.getLogger().info("Loaded " + tierRewards.size() + " reward tiers");
+
+        plugin.getLogger().info("Loaded " + tierRewards.size() + " reward tiers from drop list '" + activeDropList + "'");
     }
-    
+
     private ItemReward parseItemReward(String itemString) {
         // Split on the last colon to separate item path from amount
         int lastColonIndex = itemString.lastIndexOf(':');
@@ -373,6 +394,8 @@ public class GeigerConfiguration {
     public ColorConfig getFarRangeStartColor() { return farRangeStartColor; }
     public ColorConfig getFarRangeEndColor() { return farRangeEndColor; }
     public List<TierReward> getTierRewards() { return tierRewards; }
+    public String getActiveDropList() { return activeDropList; }
+    public List<String> getDropListNames() { return dropListNames; }
 
 
     // =========== Rules for valid source spawn locations ================

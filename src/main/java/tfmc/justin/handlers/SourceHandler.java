@@ -1,6 +1,7 @@
 package tfmc.justin.handlers;
 
 import me.Plugins.TLibs.Objects.API.ItemAPI;
+import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.Location;
 import org.bukkit.Sound;
@@ -9,6 +10,7 @@ import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import tfmc.justin.config.GeigerConfiguration;
+import tfmc.justin.events.GeigerSourceCollectEvent;
 import tfmc.justin.managers.DropLimitManager;
 import tfmc.justin.metrics.UsageStats;
 import tfmc.justin.models.ItemReward;
@@ -235,9 +237,14 @@ public class SourceHandler {
     }
 
     private void collectSource(Player player, EquipmentSlot geigerSlot) {
+        // moveSourceToRandomLocation() nulls out sourceLocation before it starts
+        // searching, so the collected location has to be grabbed first
+        Location collected = sourceLocation;
+
         dropLimits.recordCollection(player);
         UsageStats.getInstance().recordSourceCollected();
         moveSourceToRandomLocation();
+        Bukkit.getPluginManager().callEvent(new GeigerSourceCollectEvent(player, collected));
         notifyPlayerOfCollection(player);
         replaceGeigerWithDeadVersion(player, geigerSlot);
         giveReward(player);

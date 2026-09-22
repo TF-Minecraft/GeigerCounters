@@ -10,6 +10,8 @@ public class Utils {
     // Durations like "12h", "90m", "1d", "30s" - or a bare number, read as seconds
     private static final Pattern DURATION_PATTERN = Pattern.compile("(?i)^[ \t]*([0-9]+(?:[.][0-9]+)?)[ \t]*([smhd]?)[ \t]*$");
 
+    // Keep the existing legacy text representation, formatting, and exact-string comparisons.
+    @SuppressWarnings("deprecation")
     public static String colorize(String msg) {
         Matcher match = Pattern.compile("#[a-fA-F0-9]{6}").matcher(msg);
         while (match.find()) {

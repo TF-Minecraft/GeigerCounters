@@ -2,7 +2,7 @@ main: tfmc.justin.geiger_counter
 version: ${project.version}
 name: geiger_counter
 author: Justin
-api-version: 1.21
+api-version: '1.21.10'
 depend: [TLibs]
 softdepend: [WorldGuard]
 commands:

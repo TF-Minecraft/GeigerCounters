@@ -1,7 +1,49 @@
+# Build output
 target/
+build/
+out/
+dist/
+nbbuild/
+nbdist/
+*.class
+dependency-reduced-pom.xml
 
-# Built plugin jars live on the GitHub releases page, not in the repo
+# Build dependencies
+/.build/
 *.jar
+!.mvn/wrapper/maven-wrapper.jar
 
-# Resolved build dependency metadata
-.build/
+# Python caches and environments
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# IDE files
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.project
+.classpath
+.settings/
+nbproject/private/
+.nb-gradle/
+
+# Logs and temporary files
+*.log
+hs_err_pid*
+replay_pid*
+*.bak
+*.swp
+*.tmp
+*~
+
+# Operating system files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local investigation notes and test artifacts
+/.scratch/

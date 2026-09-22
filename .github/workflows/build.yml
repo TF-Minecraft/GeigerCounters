@@ -19,6 +19,9 @@ jobs:
           java-version: '21'
           cache: maven
 
+      - name: Install pinned TLibs in Maven
+        uses: TF-Minecraft/TLibs/.github/actions/setup@804728d2c0d62d64e3194bcdeffc3708acfbc514
+
       - name: Set dated development version
         id: dev
         shell: bash

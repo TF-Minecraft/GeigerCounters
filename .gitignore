@@ -2,3 +2,6 @@ target/
 
 # Built plugin jars live on the GitHub releases page, not in the repo
 *.jar
+
+# Resolved build dependency metadata
+.build/

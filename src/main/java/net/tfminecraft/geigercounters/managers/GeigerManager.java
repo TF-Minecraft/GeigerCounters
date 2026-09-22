@@ -1,6 +1,5 @@
 package net.tfminecraft.geigercounters.managers;
 
-import net.tfminecraft.tlibs.enums.APIType;
 import net.tfminecraft.tlibs.objects.api.ItemAPI;
 import net.tfminecraft.tlibs.TLibs;
 import org.bukkit.Bukkit;
@@ -57,7 +56,7 @@ public class GeigerManager {
     // Initialize the Geiger Counter system
     // ====================================
     public void initialize() {
-        api = (ItemAPI) TLibs.getApiInstance(APIType.ITEM_API);
+        api = TLibs.getItemAPI();
         
         configuration = new GeigerConfiguration(plugin);
         configuration.load();

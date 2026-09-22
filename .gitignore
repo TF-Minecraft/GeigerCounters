@@ -7,6 +7,11 @@ nbbuild/
 nbdist/
 *.class
 dependency-reduced-pom.xml
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
 
 # Build dependencies
 /.build/

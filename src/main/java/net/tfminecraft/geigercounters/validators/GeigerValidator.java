@@ -1,6 +1,6 @@
-package tfmc.justin.validators;
+package net.tfminecraft.geigercounters.validators;
 
-import me.Plugins.TLibs.Objects.API.ItemAPI;
+import net.tfminecraft.tlibs.objects.api.ItemAPI;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 

@@ -1,4 +1,4 @@
-package tfmc.justin.models;
+package net.tfminecraft.geigercounters.models;
 
 public class ItemReward {
     private final String outputItem;

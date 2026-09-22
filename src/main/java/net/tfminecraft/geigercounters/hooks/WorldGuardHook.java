@@ -1,4 +1,4 @@
-package tfmc.justin.hooks;
+package net.tfminecraft.geigercounters.hooks;
 
 import com.sk89q.worldedit.bukkit.BukkitAdapter;
 import com.sk89q.worldedit.math.BlockVector3;

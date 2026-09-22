@@ -1,10 +1,10 @@
-package tfmc.justin.handlers;
+package net.tfminecraft.geigercounters.handlers;
 
 import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.entity.Player;
-import tfmc.justin.config.GeigerConfiguration;
+import net.tfminecraft.geigercounters.config.GeigerConfiguration;
 
 // ====================================
 // Handles rendering particle effects for the Geiger Counter

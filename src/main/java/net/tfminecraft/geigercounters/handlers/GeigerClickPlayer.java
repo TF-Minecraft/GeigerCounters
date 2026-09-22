@@ -1,9 +1,9 @@
-package tfmc.justin.handlers;
+package net.tfminecraft.geigercounters.handlers;
 
 import org.bukkit.Bukkit;
 import org.bukkit.SoundCategory;
 import org.bukkit.entity.Player;
-import tfmc.justin.config.GeigerConfiguration;
+import net.tfminecraft.geigercounters.config.GeigerConfiguration;
 
 import java.util.HashMap;
 import java.util.Iterator;

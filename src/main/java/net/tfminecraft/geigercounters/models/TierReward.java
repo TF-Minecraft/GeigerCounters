@@ -1,4 +1,4 @@
-package tfmc.justin.models;
+package net.tfminecraft.geigercounters.models;
 
 import java.util.ArrayList;
 import java.util.List;

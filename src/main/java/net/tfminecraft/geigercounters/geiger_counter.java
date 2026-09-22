@@ -1,14 +1,14 @@
-package tfmc.justin;
+package net.tfminecraft.geigercounters;
 
 import org.bstats.bukkit.Metrics;
 import org.bstats.charts.SimplePie;
 import org.bstats.charts.SingleLineChart;
 import org.bukkit.plugin.java.JavaPlugin;
-import tfmc.justin.commands.GeigerCommand;
-import tfmc.justin.config.ConfigMigrator;
-import tfmc.justin.config.GeigerConfiguration;
-import tfmc.justin.metrics.UsageStats;
-import tfmc.justin.managers.GeigerManager;
+import net.tfminecraft.geigercounters.commands.GeigerCommand;
+import net.tfminecraft.geigercounters.config.ConfigMigrator;
+import net.tfminecraft.geigercounters.config.GeigerConfiguration;
+import net.tfminecraft.geigercounters.metrics.UsageStats;
+import net.tfminecraft.geigercounters.managers.GeigerManager;
 
 public class geiger_counter extends JavaPlugin {
 

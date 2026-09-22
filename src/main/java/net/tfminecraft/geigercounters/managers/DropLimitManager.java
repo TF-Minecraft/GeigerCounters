@@ -1,10 +1,10 @@
-package tfmc.justin.managers;
+package net.tfminecraft.geigercounters.managers;
 
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
-import tfmc.justin.config.GeigerConfiguration;
+import net.tfminecraft.geigercounters.config.GeigerConfiguration;
 
 import java.io.File;
 import java.io.IOException;

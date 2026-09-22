@@ -1,4 +1,4 @@
-main: tfmc.justin.geiger_counter
+main: net.tfminecraft.geigercounters.geiger_counter
 version: ${project.version}
 name: geiger_counter
 author: Justin

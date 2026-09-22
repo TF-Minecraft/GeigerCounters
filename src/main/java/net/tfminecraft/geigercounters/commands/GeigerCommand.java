@@ -1,4 +1,4 @@
-package tfmc.justin.commands;
+package net.tfminecraft.geigercounters.commands;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -8,10 +8,10 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
-import tfmc.justin.config.GeigerConfiguration;
-import tfmc.justin.config.Messages;
-import tfmc.justin.managers.GeigerManager;
-import tfmc.justin.utils.Utils;
+import net.tfminecraft.geigercounters.config.GeigerConfiguration;
+import net.tfminecraft.geigercounters.config.Messages;
+import net.tfminecraft.geigercounters.managers.GeigerManager;
+import net.tfminecraft.geigercounters.utils.Utils;
 
 import java.util.ArrayList;
 import java.util.Arrays;

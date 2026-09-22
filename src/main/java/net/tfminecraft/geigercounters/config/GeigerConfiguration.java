@@ -1,4 +1,4 @@
-package tfmc.justin.config;
+package net.tfminecraft.geigercounters.config;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -6,9 +6,9 @@ import org.bukkit.World;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
-import tfmc.justin.models.ItemReward;
-import tfmc.justin.models.TierReward;
-import tfmc.justin.utils.Utils;
+import net.tfminecraft.geigercounters.models.ItemReward;
+import net.tfminecraft.geigercounters.models.TierReward;
+import net.tfminecraft.geigercounters.utils.Utils;
 
 import java.io.File;
 import java.util.ArrayList;

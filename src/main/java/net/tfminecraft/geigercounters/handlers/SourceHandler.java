@@ -1,6 +1,6 @@
-package tfmc.justin.handlers;
+package net.tfminecraft.geigercounters.handlers;
 
-import me.Plugins.TLibs.Objects.API.ItemAPI;
+import net.tfminecraft.tlibs.objects.api.ItemAPI;
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.Location;
@@ -9,14 +9,14 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
-import tfmc.justin.config.GeigerConfiguration;
-import tfmc.justin.events.GeigerSourceCollectEvent;
-import tfmc.justin.managers.DropLimitManager;
-import tfmc.justin.metrics.UsageStats;
-import tfmc.justin.models.ItemReward;
-import tfmc.justin.models.TierReward;
-import tfmc.justin.utils.Utils;
-import tfmc.justin.validators.SpawnLocationFilter;
+import net.tfminecraft.geigercounters.config.GeigerConfiguration;
+import net.tfminecraft.geigercounters.events.GeigerSourceCollectEvent;
+import net.tfminecraft.geigercounters.managers.DropLimitManager;
+import net.tfminecraft.geigercounters.metrics.UsageStats;
+import net.tfminecraft.geigercounters.models.ItemReward;
+import net.tfminecraft.geigercounters.models.TierReward;
+import net.tfminecraft.geigercounters.utils.Utils;
+import net.tfminecraft.geigercounters.validators.SpawnLocationFilter;
 
 import java.util.HashMap;
 import java.util.List;

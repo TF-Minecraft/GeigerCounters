@@ -1,19 +1,19 @@
-package tfmc.justin.managers;
+package net.tfminecraft.geigercounters.managers;
 
-import me.Plugins.TLibs.Enums.APIType;
-import me.Plugins.TLibs.Objects.API.ItemAPI;
-import me.Plugins.TLibs.TLibs;
+import net.tfminecraft.tlibs.enums.APIType;
+import net.tfminecraft.tlibs.objects.api.ItemAPI;
+import net.tfminecraft.tlibs.TLibs;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.plugin.java.JavaPlugin;
-import tfmc.justin.config.GeigerConfiguration;
-import tfmc.justin.handlers.GeigerClickPlayer;
-import tfmc.justin.handlers.ParticleRenderer;
-import tfmc.justin.handlers.SourceHandler;
-import tfmc.justin.validators.GeigerValidator;
-import tfmc.justin.validators.SpawnLocationFilter;
+import net.tfminecraft.geigercounters.config.GeigerConfiguration;
+import net.tfminecraft.geigercounters.handlers.GeigerClickPlayer;
+import net.tfminecraft.geigercounters.handlers.ParticleRenderer;
+import net.tfminecraft.geigercounters.handlers.SourceHandler;
+import net.tfminecraft.geigercounters.validators.GeigerValidator;
+import net.tfminecraft.geigercounters.validators.SpawnLocationFilter;
 
 // ====================================
 // Main manager for the Geiger Counter system

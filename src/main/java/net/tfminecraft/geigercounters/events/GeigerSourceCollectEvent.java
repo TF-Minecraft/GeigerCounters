@@ -1,4 +1,4 @@
-package tfmc.justin.events;
+package net.tfminecraft.geigercounters.events;
 
 import org.bukkit.Location;
 import org.bukkit.entity.Player;

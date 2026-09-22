@@ -1,4 +1,4 @@
-package tfmc.justin.metrics;
+package net.tfminecraft.geigercounters.metrics;
 
 import java.util.concurrent.atomic.AtomicInteger;
 

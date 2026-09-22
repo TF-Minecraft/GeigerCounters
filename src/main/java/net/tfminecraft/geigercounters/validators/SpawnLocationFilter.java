@@ -1,4 +1,4 @@
-package tfmc.justin.validators;
+package net.tfminecraft.geigercounters.validators;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -6,8 +6,8 @@ import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.plugin.java.JavaPlugin;
-import tfmc.justin.config.GeigerConfiguration;
-import tfmc.justin.hooks.WorldGuardHook;
+import net.tfminecraft.geigercounters.config.GeigerConfiguration;
+import net.tfminecraft.geigercounters.hooks.WorldGuardHook;
 
 // ====================================
 // Decides whether a candidate source location is allowed to be used

@@ -1,4 +1,4 @@
-package tfmc.justin.utils;
+package net.tfminecraft.geigercounters.utils;
 
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;

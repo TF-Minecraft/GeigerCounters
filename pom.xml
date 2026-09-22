@@ -114,7 +114,7 @@
                             <relocations>
                                 <relocation>
                                     <pattern>org.bstats</pattern>
-                                    <shadedPattern>tfmc.justin.bstats</shadedPattern>
+                                    <shadedPattern>net.tfminecraft.geigercounters.bstats</shadedPattern>
                                 </relocation>
                             </relocations>
                         </configuration>

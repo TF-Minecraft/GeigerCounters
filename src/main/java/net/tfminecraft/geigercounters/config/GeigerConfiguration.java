@@ -197,7 +197,7 @@ public class GeigerConfiguration {
     // onto the same event once lowercased, since the enum name is the event ID
     // with dots turned into underscores.
     private String normalizeSoundName(String raw) {
-        if (raw == null || raw.trim().isEmpty()) {
+        if (raw.trim().isEmpty()) {
             return DEFAULT_SOUND;
         }
 

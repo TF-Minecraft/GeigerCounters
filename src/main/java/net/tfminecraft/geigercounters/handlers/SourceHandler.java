@@ -104,7 +104,7 @@ public class SourceHandler {
         loadChunkFor(x, z).whenComplete((chunk, error) -> {
             // Paper completes chunk futures on the main thread, so everything
             // below is safe to run against the world directly
-            if (!plugin.isEnabled()) {
+            if (pendingMove != result || !plugin.isEnabled()) {
                 result.complete(null);
                 return;
             }
@@ -141,11 +141,12 @@ public class SourceHandler {
     // filter check is logged so the admin knows the spot is normally excluded
     // ====================================
     public CompletableFuture<Location> moveSourceToLocation(double x, double z) {
+        sourceLocation = null;
         CompletableFuture<Location> result = new CompletableFuture<>();
         pendingMove = result;
 
         loadChunkFor(x, z).whenComplete((chunk, error) -> {
-            if (!plugin.isEnabled()) {
+            if (pendingMove != result || !plugin.isEnabled()) {
                 result.complete(null);
                 return;
             }
@@ -204,6 +205,18 @@ public class SourceHandler {
         // The source is already being relocated - the caller is working from a
         // location that no longer counts, so don't hand out a second reward
         if (sourceLocation == null) {
+            return;
+        }
+
+        // Callers may hold a distance from before another player's collection.
+        // Validate against the current source, including its world, before consuming it.
+        Location playerLocation = player.getLocation();
+        if (!sourceLocation.getWorld().equals(playerLocation.getWorld())) {
+            return;
+        }
+        double deltaX = playerLocation.getX() - sourceLocation.getX();
+        double deltaZ = playerLocation.getZ() - sourceLocation.getZ();
+        if (Math.hypot(deltaX, deltaZ) > config.getCollectionDistance()) {
             return;
         }
 
@@ -284,7 +297,7 @@ public class SourceHandler {
         
         // Select a tier based on weights
         TierReward selectedTier = selectRandomTier(tiers);
-        if (selectedTier == null || selectedTier.isEmpty()) {
+        if (selectedTier.isEmpty()) {
             return;
         }
         
@@ -312,15 +325,16 @@ public class SourceHandler {
         
         // Find which tier this value falls into
         double cumulativeWeight = 0.0;
-        for (TierReward tier : tiers) {
+        for (int index = 0; index < tiers.size() - 1; index++) {
+            TierReward tier = tiers.get(index);
             cumulativeWeight += tier.getWeight();
             if (randomValue <= cumulativeWeight) {
                 return tier;
             }
         }
-        
-        // Fallback to last tier (shouldnt happen but why not)
-        return tiers.get(tiers.size() - 1);
+
+        // Every remaining draw selects the final tier, including rounding fallback.
+        return tiers.getLast();
     }
     
     // ====================================

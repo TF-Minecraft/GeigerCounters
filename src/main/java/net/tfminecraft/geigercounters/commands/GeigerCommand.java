@@ -103,6 +103,9 @@ public class GeigerCommand implements CommandExecutor, TabCompleter {
         try {
             x = Double.parseDouble(args[1]);
             z = Double.parseDouble(args[2]);
+            if (!Double.isFinite(x) || !Double.isFinite(z)) {
+                throw new NumberFormatException("Coordinates must be finite");
+            }
         } catch (NumberFormatException e) {
             sender.sendMessage(messages().get("admin.move-invalid-coords"));
             return;

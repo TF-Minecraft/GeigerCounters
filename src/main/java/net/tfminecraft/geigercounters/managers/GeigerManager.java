@@ -141,12 +141,15 @@ public class GeigerManager {
     // in either hand
     // ====================================
     private void checkAllPlayers() {
-        Location source = sourceHandler.getSourceLocation();
-        if (source == null) {
-            return;
-        }
-
         for (Player player : Bukkit.getOnlinePlayers()) {
+            // A preceding player can collect and relocate the source immediately.
+            Location source = sourceHandler.getSourceLocation();
+            if (source == null) {
+                return;
+            }
+            if (!player.getLocation().getWorld().equals(source.getWorld())) {
+                continue;
+            }
             EquipmentSlot geigerSlot = findGeigerSlot(player);
 
             if (geigerSlot != null) {

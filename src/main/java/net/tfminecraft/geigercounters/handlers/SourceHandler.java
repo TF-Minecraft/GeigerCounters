@@ -268,17 +268,26 @@ public class SourceHandler {
     }
 
     private void replaceGeigerWithDeadVersion(Player player, EquipmentSlot geigerSlot) {
-        // Remove active Geiger Counter from whichever hand held it
-        if (geigerSlot == EquipmentSlot.OFF_HAND) {
-            player.getInventory().setItemInOffHand(null);
+        // Consume one counter, preserving any others stacked in the same hand.
+        boolean offHand = geigerSlot == EquipmentSlot.OFF_HAND;
+        ItemStack active = offHand ? player.getInventory().getItemInOffHand()
+            : player.getInventory().getItemInMainHand();
+        ItemStack remaining = null;
+        if (active.getAmount() > 1) {
+            remaining = active.clone();
+            remaining.setAmount(active.getAmount() - 1);
+        }
+        if (offHand) {
+            player.getInventory().setItemInOffHand(remaining);
         } else {
-            player.getInventory().setItemInMainHand(null);
+            player.getInventory().setItemInMainHand(remaining);
         }
 
         // Give dead Geiger Counter
         try {
             ItemStack deadGeiger = api.getCreator().getItemFromPath(DEAD_GEIGER_PATH).clone();
-            player.getInventory().addItem(deadGeiger);
+            deadGeiger.setAmount(1);
+            giveItemOrDropLeftovers(player, deadGeiger);
             player.playSound(player.getLocation(), Sound.ENTITY_ITEM_BREAK, 1f, 1f);
             player.sendMessage(config.getMessages().get("player.dead-geiger"));
         } catch (Exception e) {
@@ -343,13 +352,19 @@ public class SourceHandler {
     private void giveRewardItem(Player player, ItemReward reward, String tierName) {
         try {
             ItemStack rewardItem = createRewardItem(reward);
-            player.getInventory().addItem(rewardItem);
+            giveItemOrDropLeftovers(player, rewardItem);
             plugin.getLogger().info(player.getName() + " received " + tierName + " reward: " + reward.getOutputItem());
         } catch (Exception e) {
             plugin.getLogger().warning("Failed to give reward to " + player.getName() + ": " + e.getMessage());
         }
     }
     
+    private void giveItemOrDropLeftovers(Player player, ItemStack item) {
+        for (ItemStack leftover : player.getInventory().addItem(item).values()) {
+            player.getWorld().dropItemNaturally(player.getLocation(), leftover);
+        }
+    }
+
     // ====================================
     // Create an ItemStack for the reward
     // ====================================

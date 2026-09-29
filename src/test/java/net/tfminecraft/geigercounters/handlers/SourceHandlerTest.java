@@ -19,6 +19,8 @@ import org.bukkit.inventory.*;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 class SourceHandlerTest {
   JavaPlugin plugin;
@@ -58,6 +60,10 @@ class SourceHandlerTest {
     player = mock(Player.class);
     inventory = mock(PlayerInventory.class);
     when(player.getInventory()).thenReturn(inventory);
+    ItemStack singleCounter = mock(ItemStack.class);
+    when(singleCounter.getAmount()).thenReturn(1);
+    when(inventory.getItemInMainHand()).thenReturn(singleCounter);
+    when(inventory.getItemInOffHand()).thenReturn(singleCounter);
     when(player.getUniqueId()).thenReturn(UUID.randomUUID());
     when(player.getName()).thenReturn("Hunter");
     when(player.getWorld()).thenReturn(world);
@@ -296,5 +302,81 @@ class SourceHandlerTest {
       collect(EquipmentSlot.HAND);
       verify(api.getCreator()).getItemFromPath("m." + tiers.get(index).getTierName());
     }
+  }
+
+  @ParameterizedTest
+  @EnumSource(
+      value = EquipmentSlot.class,
+      names = {"HAND", "OFF_HAND"})
+  void collectionConsumesExactlyOneCounterFromEitherHandStack(EquipmentSlot slot) {
+    ItemStack active = mock(ItemStack.class), remaining = mock(ItemStack.class);
+    when(active.getAmount()).thenReturn(5);
+    when(active.clone()).thenReturn(remaining);
+    if (slot == EquipmentSlot.HAND) {
+      when(inventory.getItemInMainHand()).thenReturn(active);
+    } else {
+      when(inventory.getItemInOffHand()).thenReturn(active);
+    }
+    ItemStack deadTemplate = mock(ItemStack.class), dead = mock(ItemStack.class);
+    when(api.getCreator().getItemFromPath("m.TOOLS.DEAD_GEIGER_COUNTER")).thenReturn(deadTemplate);
+    when(deadTemplate.clone()).thenReturn(dead);
+    place();
+    collect(slot);
+    verify(remaining).setAmount(4);
+    if (slot == EquipmentSlot.HAND) {
+      verify(inventory).setItemInMainHand(remaining);
+      verify(inventory, never()).setItemInOffHand(any());
+    } else {
+      verify(inventory).setItemInOffHand(remaining);
+      verify(inventory, never()).setItemInMainHand(any());
+    }
+    verify(dead).setAmount(1);
+    verify(inventory).addItem(dead);
+    verify(active, never()).setAmount(anyInt());
+    verify(deadTemplate, never()).setAmount(anyInt());
+    verify(world, never()).dropItemNaturally(any(Location.class), any(ItemStack.class));
+  }
+
+  @Test
+  void fullInventoryDropsDeadCounterAndCompleteRewardWithoutLosingAmounts() {
+    ItemStack deadTemplate = mock(ItemStack.class), dead = mock(ItemStack.class);
+    when(api.getCreator().getItemFromPath("m.TOOLS.DEAD_GEIGER_COUNTER")).thenReturn(deadTemplate);
+    when(deadTemplate.clone()).thenReturn(dead);
+    ItemStack rewardTemplate = mock(ItemStack.class), reward = mock(ItemStack.class);
+    when(api.getCreator().getItemFromPath("m.reward")).thenReturn(rewardTemplate);
+    when(rewardTemplate.clone()).thenReturn(reward);
+    TierReward tier = new TierReward("rare", 1);
+    tier.addItem(new ItemReward("m.reward", 12));
+    when(config.getTierRewards()).thenReturn(List.of(tier));
+    when(inventory.addItem(dead)).thenReturn(new HashMap<>(Map.of(0, dead)));
+    when(inventory.addItem(reward)).thenReturn(new HashMap<>(Map.of(0, reward)));
+    place();
+    collect(EquipmentSlot.OFF_HAND);
+    verify(dead).setAmount(1);
+    verify(reward).setAmount(12);
+    verify(inventory).setItemInOffHand(null);
+    verify(world).dropItemNaturally(player.getLocation(), dead);
+    verify(world).dropItemNaturally(player.getLocation(), reward);
+    verify(world, times(2)).dropItemNaturally(any(Location.class), any(ItemStack.class));
+  }
+
+  @Test
+  void partiallyFilledInventoryDropsOnlyTheReturnedRewardRemainder() {
+    ItemStack rewardTemplate = mock(ItemStack.class), reward = mock(ItemStack.class);
+    ItemStack remainder = mock(ItemStack.class);
+    when(remainder.getAmount()).thenReturn(3);
+    when(api.getCreator().getItemFromPath("m.reward")).thenReturn(rewardTemplate);
+    when(rewardTemplate.clone()).thenReturn(reward);
+    TierReward tier = new TierReward("rare", 1);
+    tier.addItem(new ItemReward("m.reward", 12));
+    when(config.getTierRewards()).thenReturn(List.of(tier));
+    when(inventory.addItem(reward)).thenReturn(new HashMap<>(Map.of(0, remainder)));
+    place();
+    collect(EquipmentSlot.HAND);
+    verify(reward).setAmount(12);
+    verify(world).dropItemNaturally(player.getLocation(), remainder);
+    verify(world, times(1)).dropItemNaturally(any(Location.class), any(ItemStack.class));
+    verify(remainder, never()).setAmount(anyInt());
+    assertEquals(3, remainder.getAmount());
   }
 }

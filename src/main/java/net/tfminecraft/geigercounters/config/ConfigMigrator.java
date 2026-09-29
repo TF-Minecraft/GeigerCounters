@@ -116,7 +116,8 @@ public class ConfigMigrator {
     // ====================================
     private void migrateMessages() {
         File messagesFile = new File(plugin.getDataFolder(), MESSAGES_FILE);
-        if (!messagesFile.exists()) {
+        boolean createdMessagesFile = !messagesFile.exists();
+        if (createdMessagesFile) {
             plugin.saveResource(MESSAGES_FILE, false);
         }
 
@@ -135,7 +136,11 @@ public class ConfigMigrator {
                 if (oldSection.isConfigurationSection(key)) {
                     continue;
                 }
-                messages.set(key, oldSection.get(key));
+                // A newly installed file already contains player.* defaults.
+                // Legacy custom wording must replace those shipped values.
+                String destination = createdMessagesFile && List.of(LEGACY_ROOT_MESSAGES).contains(key)
+                    ? "player." + key : key;
+                messages.set(destination, oldSection.get(key));
                 moved.add(key);
             }
 
@@ -262,12 +267,12 @@ public class ConfigMigrator {
     }
 
     private YamlConfiguration loadPackagedYaml(String resource) {
-        try (InputStream stream = plugin.getResource(resource)) {
-            if (stream == null) {
-                plugin.getLogger().warning("No " + resource + " packaged in the jar - skipping its migration.");
-                return null;
-            }
-
+        InputStream stream = plugin.getResource(resource);
+        if (stream == null) {
+            plugin.getLogger().warning("No " + resource + " packaged in the jar - skipping its migration.");
+            return null;
+        }
+        try (stream) {
             try (Reader reader = new InputStreamReader(stream, StandardCharsets.UTF_8)) {
                 return YamlConfiguration.loadConfiguration(reader);
             }

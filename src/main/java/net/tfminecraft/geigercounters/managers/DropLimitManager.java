@@ -14,6 +14,7 @@ import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.UUID;
 
@@ -91,19 +92,22 @@ public class DropLimitManager {
 
     // ====================================
     // Millis until the next collection slot frees up, or 0 if one is free.
-    // That is the oldest stamp in the window plus the window length.
+    // If the configured limit was lowered, enough stamps must expire to
+    // bring the retained count below the new limit.
     // ====================================
     public long getMillisUntilNextDrop(UUID playerId) {
-        if (getRemaining(playerId) > 0) {
+        if (!config.isLimitEnabled() || getRemaining(playerId) > 0) {
             return 0L;
         }
 
+        // Enabled limits are positive; zero remaining guarantees a nonempty history.
         Deque<Long> stamps = collections.get(playerId);
-        if (stamps == null || stamps.isEmpty()) {
-            return 0L;
+        Iterator<Long> timestamps = stamps.iterator();
+        long nextSlot = timestamps.next();
+        for (int excess = stamps.size() - config.getLimitDrops(); excess > 0; excess--) {
+            nextSlot = timestamps.next();
         }
-
-        long readyAt = stamps.peekFirst() + config.getLimitWindowMillis();
+        long readyAt = nextSlot + config.getLimitWindowMillis();
         return Math.max(0L, readyAt - System.currentTimeMillis());
     }
 

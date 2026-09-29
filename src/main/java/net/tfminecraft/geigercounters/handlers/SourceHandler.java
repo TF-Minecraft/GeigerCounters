@@ -104,7 +104,7 @@ public class SourceHandler {
         loadChunkFor(x, z).whenComplete((chunk, error) -> {
             // Paper completes chunk futures on the main thread, so everything
             // below is safe to run against the world directly
-            if (!plugin.isEnabled()) {
+            if (pendingMove != result || !plugin.isEnabled()) {
                 result.complete(null);
                 return;
             }
@@ -141,11 +141,12 @@ public class SourceHandler {
     // filter check is logged so the admin knows the spot is normally excluded
     // ====================================
     public CompletableFuture<Location> moveSourceToLocation(double x, double z) {
+        sourceLocation = null;
         CompletableFuture<Location> result = new CompletableFuture<>();
         pendingMove = result;
 
         loadChunkFor(x, z).whenComplete((chunk, error) -> {
-            if (!plugin.isEnabled()) {
+            if (pendingMove != result || !plugin.isEnabled()) {
                 result.complete(null);
                 return;
             }
@@ -207,6 +208,18 @@ public class SourceHandler {
             return;
         }
 
+        // Callers may hold a distance from before another player's collection.
+        // Validate against the current source, including its world, before consuming it.
+        Location playerLocation = player.getLocation();
+        if (!sourceLocation.getWorld().equals(playerLocation.getWorld())) {
+            return;
+        }
+        double deltaX = playerLocation.getX() - sourceLocation.getX();
+        double deltaZ = playerLocation.getZ() - sourceLocation.getZ();
+        if (Math.hypot(deltaX, deltaZ) > config.getCollectionDistance()) {
+            return;
+        }
+
         // Player is out of collections for this window - the source stays put
         // so somebody else can still claim it
         if (!dropLimits.canCollect(player)) {
@@ -255,17 +268,26 @@ public class SourceHandler {
     }
 
     private void replaceGeigerWithDeadVersion(Player player, EquipmentSlot geigerSlot) {
-        // Remove active Geiger Counter from whichever hand held it
-        if (geigerSlot == EquipmentSlot.OFF_HAND) {
-            player.getInventory().setItemInOffHand(null);
+        // Consume one counter, preserving any others stacked in the same hand.
+        boolean offHand = geigerSlot == EquipmentSlot.OFF_HAND;
+        ItemStack active = offHand ? player.getInventory().getItemInOffHand()
+            : player.getInventory().getItemInMainHand();
+        ItemStack remaining = null;
+        if (active.getAmount() > 1) {
+            remaining = active.clone();
+            remaining.setAmount(active.getAmount() - 1);
+        }
+        if (offHand) {
+            player.getInventory().setItemInOffHand(remaining);
         } else {
-            player.getInventory().setItemInMainHand(null);
+            player.getInventory().setItemInMainHand(remaining);
         }
 
         // Give dead Geiger Counter
         try {
             ItemStack deadGeiger = api.getCreator().getItemFromPath(DEAD_GEIGER_PATH).clone();
-            player.getInventory().addItem(deadGeiger);
+            deadGeiger.setAmount(1);
+            giveItemOrDropLeftovers(player, deadGeiger);
             player.playSound(player.getLocation(), Sound.ENTITY_ITEM_BREAK, 1f, 1f);
             player.sendMessage(config.getMessages().get("player.dead-geiger"));
         } catch (Exception e) {
@@ -284,7 +306,7 @@ public class SourceHandler {
         
         // Select a tier based on weights
         TierReward selectedTier = selectRandomTier(tiers);
-        if (selectedTier == null || selectedTier.isEmpty()) {
+        if (selectedTier.isEmpty()) {
             return;
         }
         
@@ -312,15 +334,16 @@ public class SourceHandler {
         
         // Find which tier this value falls into
         double cumulativeWeight = 0.0;
-        for (TierReward tier : tiers) {
+        for (int index = 0; index < tiers.size() - 1; index++) {
+            TierReward tier = tiers.get(index);
             cumulativeWeight += tier.getWeight();
             if (randomValue <= cumulativeWeight) {
                 return tier;
             }
         }
-        
-        // Fallback to last tier (shouldnt happen but why not)
-        return tiers.get(tiers.size() - 1);
+
+        // Every remaining draw selects the final tier, including rounding fallback.
+        return tiers.getLast();
     }
     
     // ====================================
@@ -329,13 +352,19 @@ public class SourceHandler {
     private void giveRewardItem(Player player, ItemReward reward, String tierName) {
         try {
             ItemStack rewardItem = createRewardItem(reward);
-            player.getInventory().addItem(rewardItem);
+            giveItemOrDropLeftovers(player, rewardItem);
             plugin.getLogger().info(player.getName() + " received " + tierName + " reward: " + reward.getOutputItem());
         } catch (Exception e) {
             plugin.getLogger().warning("Failed to give reward to " + player.getName() + ": " + e.getMessage());
         }
     }
     
+    private void giveItemOrDropLeftovers(Player player, ItemStack item) {
+        for (ItemStack leftover : player.getInventory().addItem(item).values()) {
+            player.getWorld().dropItemNaturally(player.getLocation(), leftover);
+        }
+    }
+
     // ====================================
     // Create an ItemStack for the reward
     // ====================================

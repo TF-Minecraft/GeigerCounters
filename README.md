@@ -23,6 +23,14 @@ Originally created by [Justinas Launikonis](https://github.com/JustinasLa).
 
 Technical documentation is maintained in [TF-Minecraft/Docs](https://github.com/TF-Minecraft/Docs).
 
+## Tests
+
+With Java 21 and the pinned plugin dependencies installed, run `mvn clean verify`.
+Tests use JUnit, Mockito, and MockBukkit; JaCoCo reports are written to
+`target/site/jacoco/index.html` and uploaded by CI. Tests run locally without a live
+Minecraft server. Verification requires 100% line, branch, and instruction
+coverage of production code, with no coverage exclusions.
+
 ## License
 
 Copyright (c) 2026 TF-Minecraft contributors.

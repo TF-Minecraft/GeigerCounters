@@ -75,10 +75,11 @@ public class Messages {
     }
 
     private YamlConfiguration loadPackaged() {
-        try (InputStream stream = plugin.getResource(ConfigMigrator.MESSAGES_FILE)) {
-            if (stream == null) {
-                return null;
-            }
+        InputStream stream = plugin.getResource(ConfigMigrator.MESSAGES_FILE);
+        if (stream == null) {
+            return null;
+        }
+        try (stream) {
             try (Reader reader = new InputStreamReader(stream, StandardCharsets.UTF_8)) {
                 return YamlConfiguration.loadConfiguration(reader);
             }

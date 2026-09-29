@@ -1,6 +1,6 @@
 package net.tfminecraft.geigercounters.hooks;
 
-import com.sk89q.worldedit.bukkit.BukkitAdapter;
+import com.sk89q.worldedit.bukkit.BukkitWorld;
 import com.sk89q.worldedit.math.BlockVector3;
 import com.sk89q.worldguard.WorldGuard;
 import com.sk89q.worldguard.protection.managers.RegionManager;
@@ -30,7 +30,7 @@ public class WorldGuardHook {
         RegionManager regions = WorldGuard.getInstance()
             .getPlatform()
             .getRegionContainer()
-            .get(BukkitAdapter.adapt(location.getWorld()));
+            .get(new BukkitWorld(location.getWorld()));
 
         if (regions == null) {
             return false;

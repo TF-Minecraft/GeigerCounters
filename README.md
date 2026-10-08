@@ -11,7 +11,7 @@ The signal gives a sense of distance, so finding the reward means moving through
 - **Visual tracking** — particle rings change in color and number as the player approaches the source.
 - **Audible feedback** — irregular counter clicks become more frequent at closer distances.
 - **Tiered discoveries** — weighted reward tiers give each successful hunt a chance of different loot.
-- **A moving target** — collecting the shared source relocates it to another eligible location in the search area.
+- **A moving target** — collecting the shared source relocates it within the configured search area.
 - **Consumable counters** — a successful collection replaces the active counter with a dead one.
 - **Personal collection limits** — timed allowances limit repeated rewards while letting other players continue the hunt.
 
@@ -26,10 +26,12 @@ Technical documentation is maintained in [TF-Minecraft/Docs](https://github.com/
 ## Tests
 
 With Java 21 and the pinned plugin dependencies installed, run `mvn clean verify`.
-Tests use JUnit, Mockito, and MockBukkit; JaCoCo reports are written to
-`target/site/jacoco/index.html` and uploaded by CI. Tests run locally without a live
-Minecraft server. Verification requires 100% line, branch, and instruction
+Tests use JUnit 5, Mockito, and MockBukkit. Surefire test results are in
+`target/surefire-reports/`; JaCoCo HTML and XML reports are in `target/site/jacoco/`.
+The Build workflow uploads both. Verification requires 100% line, branch, and instruction
 coverage of production code, with no coverage exclusions.
+Client sounds and particles, live world generation, and installed item and region
+plugins require separate in-game checks.
 
 ## License
 

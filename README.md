@@ -28,7 +28,7 @@ Technical documentation is maintained in [TF-Minecraft/Docs](https://github.com/
 With Java 21 and the pinned plugin dependencies installed, run `mvn clean verify`.
 Tests use JUnit 5, Mockito, and MockBukkit. Surefire test results are in
 `target/surefire-reports/`; JaCoCo HTML and XML reports are in `target/site/jacoco/`.
-CI uploads both. Verification requires 100% line, branch, and instruction
+The Build workflow uploads both. Verification requires 100% line, branch, and instruction
 coverage of production code, with no coverage exclusions.
 Client sounds and particles, live world generation, and installed item and region
 plugins require separate in-game checks.

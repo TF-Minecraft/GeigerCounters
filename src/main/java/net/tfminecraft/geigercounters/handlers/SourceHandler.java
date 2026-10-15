@@ -29,7 +29,6 @@ import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
 
 // ====================================
 // Each hunter's radioactive source: placement, persistence and collection.
@@ -46,8 +45,8 @@ public class SourceHandler {
     private static final String DATA_FILE_NAME = "sources.yml";
     private static final String SOURCES_PATH = "sources";
 
-    // Sources of characters who stop hunting are dropped on load after this long
-    private static final long SOURCE_EXPIRY_MILLIS = TimeUnit.DAYS.toMillis(30);
+    // Random spots tried for one that is both in the ring and inside the area
+    private static final int SPOT_TRIES = 100;
     
     private final JavaPlugin plugin;
     private final GeigerConfiguration config;
@@ -100,7 +99,9 @@ public class SourceHandler {
     // of stalling the main thread.
     //
     // If no candidate passes within the attempt budget the last one is used
-    // anyway, so the hunter always gets a source.
+    // anyway, so the hunter always gets a source. When no part of the ring lies
+    // inside the area (the hunter is outside it) nothing is placed, any old
+    // source is kept, and the future completes with null.
     //
     // The returned future completes on the main thread with the chosen location.
     // ====================================
@@ -111,25 +112,45 @@ public class SourceHandler {
             return running;
         }
 
+        double[] first = randomSpotNear(origin.getX(), origin.getZ());
+        if (first == null) {
+            return CompletableFuture.completedFuture(null);
+        }
+
         // Clear the old source for the duration of the search so it cannot be
         // collected while attempts are still resolving
         sources.remove(hunter);
 
         CompletableFuture<Location> result = new CompletableFuture<>();
         pending.put(hunter, result);
-        attemptPlacement(hunter, origin.getX(), origin.getZ(), 1, result);
+        attemptPlacement(hunter, origin.getX(), origin.getZ(), first, 1, result);
         return result;
     }
 
-    private void attemptPlacement(UUID hunter, double originX, double originZ, int attempt,
-                                  CompletableFuture<Location> result) {
-        double angle = random.nextDouble() * 2.0 * Math.PI;
+    // ====================================
+    // A random spot between min-distance and max-distance from the origin that
+    // is also inside the area, or null if none turns up. Uniform over the
+    // ring's area, so sources do not bunch at the inner edge.
+    // ====================================
+    private double[] randomSpotNear(double originX, double originZ) {
         double min = config.getMinSourceDistance();
         double max = config.getMaxSourceDistance();
-        // Uniform over the ring's area, so sources do not bunch at the inner edge
-        double radius = Math.sqrt(min * min + random.nextDouble() * (max * max - min * min));
-        double x = clamp(originX + radius * Math.cos(angle), config.getMinX(), config.getMaxX());
-        double z = clamp(originZ + radius * Math.sin(angle), config.getMinZ(), config.getMaxZ());
+        for (int attempt = 0; attempt < SPOT_TRIES; attempt++) {
+            double angle = random.nextDouble() * 2.0 * Math.PI;
+            double radius = Math.sqrt(min * min + random.nextDouble() * (max * max - min * min));
+            double x = originX + radius * Math.cos(angle);
+            double z = originZ + radius * Math.sin(angle);
+            if (x >= config.getMinX() && x <= config.getMaxX() && z >= config.getMinZ() && z <= config.getMaxZ()) {
+                return new double[] {x, z};
+            }
+        }
+        return null;
+    }
+
+    private void attemptPlacement(UUID hunter, double originX, double originZ, double[] spot, int attempt,
+                                  CompletableFuture<Location> result) {
+        double x = spot[0];
+        double z = spot[1];
         int maxAttempts = config.getSpawnFilters().getMaxAttempts();
 
         loadChunkFor(x, z).whenComplete((chunk, error) -> {
@@ -151,16 +172,17 @@ public class SourceHandler {
                 return;
             }
 
-            if (attempt >= maxAttempts) {
+            double[] next = attempt >= maxAttempts ? null : randomSpotNear(originX, originZ);
+            if (next == null) {
                 plugin.getLogger().warning(String.format(
                     "No valid source location found after %d attempts (last rejection: %s). "
                         + "Using the last candidate - check your source.spawn-filters settings.",
-                    maxAttempts, rejection.getDescription()));
+                    attempt, rejection.getDescription()));
                 applySource(hunter, candidate, attempt, result);
                 return;
             }
 
-            attemptPlacement(hunter, originX, originZ, attempt + 1, result);
+            attemptPlacement(hunter, originX, originZ, next, attempt + 1, result);
         });
     }
 
@@ -223,10 +245,6 @@ public class SourceHandler {
     // off for negative coordinates
     private static int blockCoord(double value) {
         return (int) Math.floor(value);
-    }
-
-    private static double clamp(double value, double min, double max) {
-        return Math.min(max, Math.max(min, value));
     }
 
     private void applySource(UUID hunter, Location location, int attempts, CompletableFuture<Location> result) {
@@ -421,8 +439,7 @@ public class SourceHandler {
     // ===== PERSISTENCE =====
 
     // ====================================
-    // Read sources.yml. Sources in worlds that are not loaded, or older than
-    // the expiry, are dropped.
+    // Read sources.yml. Sources in worlds that are not loaded are dropped.
     // ====================================
     public void load() {
         sources.clear();
@@ -436,7 +453,6 @@ public class SourceHandler {
             return;
         }
 
-        long cutoff = System.currentTimeMillis() - SOURCE_EXPIRY_MILLIS;
         for (String key : section.getKeys(false)) {
             UUID hunter;
             try {
@@ -452,7 +468,7 @@ public class SourceHandler {
             }
             long placedAt = entry.getLong("placed");
             World world = Bukkit.getWorld(entry.getString("world", ""));
-            if (world == null || placedAt <= cutoff) {
+            if (world == null) {
                 continue;
             }
 

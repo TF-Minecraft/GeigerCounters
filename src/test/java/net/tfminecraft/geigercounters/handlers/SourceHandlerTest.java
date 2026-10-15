@@ -112,18 +112,55 @@ class SourceHandlerTest {
   }
 
   @Test
-  void placementIsClampedIntoTheConfiguredArea() {
+  void placementNearTheAreaEdgeStaysInsideTheAreaAndTheRing() {
     when(config.getMinSourceDistance()).thenReturn(150.0);
     when(config.getMaxSourceDistance()).thenReturn(500.0);
-    when(config.getMinX()).thenReturn(0.0);
-    when(config.getMaxX()).thenReturn(10.0);
-    when(config.getMinZ()).thenReturn(-20.0);
-    when(config.getMaxZ()).thenReturn(-10.0);
-    for (int run = 0; run < 50; run++) {
+    when(config.getMinX()).thenReturn(-1.0);
+    when(config.getMaxX()).thenReturn(1000.0);
+    when(config.getMinZ()).thenReturn(-17.0);
+    when(config.getMaxZ()).thenReturn(1000.0);
+    for (int run = 0; run < 100; run++) {
       Location loc = handler.placeNear(hunter, origin).join();
-      assertTrue(loc.getX() >= 0 && loc.getX() <= 10);
-      assertTrue(loc.getZ() >= -20 && loc.getZ() <= -10);
+      double distance = Math.hypot(loc.getX() - origin.getX(), loc.getZ() - origin.getZ());
+      assertTrue(distance >= 150 - 1e-9 && distance <= 500 + 1e-9, "distance " + distance);
+      assertTrue(loc.getX() >= -1 && loc.getX() <= 1000);
+      assertTrue(loc.getZ() >= -17 && loc.getZ() <= 1000);
     }
+  }
+
+  @Test
+  void hunterOutsideTheAreaGetsNothingAndKeepsTheirSource() {
+    place();
+    Location old = handler.getSource(hunter);
+    when(config.getMinSourceDistance()).thenReturn(150.0);
+    when(config.getMaxSourceDistance()).thenReturn(500.0);
+    clearInvocations(world);
+    assertNull(handler.placeNear(hunter, new Location(world, 9000, 64, 9000)).join());
+    assertNull(handler.placeNear(hunter, new Location(world, 0, 64, 9000)).join());
+    assertSame(old, handler.getSource(hunter));
+    assertFalse(handler.isPlacing(hunter));
+    verify(world, never()).getChunkAtAsync(anyInt(), anyInt(), anyBoolean());
+  }
+
+  @Test
+  void runningOutOfSpotsInsideTheAreaUsesTheLastCandidate() throws Exception {
+    when(config.getMinSourceDistance()).thenReturn(10.0);
+    when(config.getMaxSourceDistance()).thenReturn(10.0);
+    when(config.getMinX()).thenReturn(0.0);
+    when(config.getMaxX()).thenReturn(20.0);
+    when(config.getMinZ()).thenReturn(-5.0);
+    when(config.getMaxZ()).thenReturn(5.0);
+    Random random = mock(Random.class);
+    // Angle 0 lands inside the area; every later angle of pi lands outside it
+    when(random.nextDouble()).thenReturn(0.0, 0.0, 0.5);
+    var field = SourceHandler.class.getDeclaredField("random");
+    field.setAccessible(true);
+    field.set(handler, random);
+    when(filter.check(any())).thenReturn(SpawnLocationFilter.Rejection.LIQUID);
+    Location loc = handler.placeNear(hunter, new Location(world, 0, 64, 0)).join();
+    assertEquals(10, loc.getX(), 1e-9);
+    assertEquals(0, loc.getZ(), 1e-9);
+    verify(filter, times(1)).check(any());
   }
 
   @Test
@@ -244,11 +281,11 @@ class SourceHandlerTest {
   }
 
   @Test
-  void loadSkipsBadExpiredAndUnloadedEntries() throws Exception {
+  void loadSkipsBadAndUnloadedEntriesButKeepsOldHunts() throws Exception {
     handler.load();
     Files.writeString(directory.resolve("sources.yml"), "other: 1\n");
     handler.load();
-    UUID expired = UUID.randomUUID(), unloaded = UUID.randomUUID(), kept = UUID.randomUUID();
+    UUID old = UUID.randomUUID(), unloaded = UUID.randomUUID(), kept = UUID.randomUUID();
     long now = System.currentTimeMillis();
     Files.writeString(
         directory.resolve("sources.yml"),
@@ -257,7 +294,7 @@ class SourceHandlerTest {
             "sources:",
             "  not-a-uuid: {world: world, x: 1, y: 2, z: 3, placed: " + now + "}",
             "  " + UUID.randomUUID() + ": scalar",
-            "  " + expired + ": {world: world, x: 1, y: 2, z: 3, placed: " + (now - 31L * 86_400_000L) + "}",
+            "  " + old + ": {world: world, x: 1, y: 2, z: 3, placed: " + (now - 31L * 86_400_000L) + "}",
             "  " + unloaded + ": {world: gone, x: 1, y: 2, z: 3, placed: " + now + "}",
             "  " + kept + ": {world: world, x: 1, y: 2, z: 3, placed: " + now + "}",
             ""));
@@ -265,7 +302,7 @@ class SourceHandlerTest {
       b.when(() -> Bukkit.getWorld("world")).thenReturn(world);
       handler.load();
     }
-    assertNull(handler.getSource(expired));
+    assertEquals(new Location(world, 1, 2, 3), handler.getSource(old));
     assertNull(handler.getSource(unloaded));
     assertEquals(new Location(world, 1, 2, 3), handler.getSource(kept));
   }

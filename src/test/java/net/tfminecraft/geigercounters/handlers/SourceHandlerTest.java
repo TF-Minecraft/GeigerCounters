@@ -362,6 +362,29 @@ class SourceHandlerTest {
   }
 
   @Test
+  void collectionSendsTheFindAndTheSpentCounterAsOneLine() {
+    when(messages.get("player.found-source")).thenReturn("Found!");
+    when(messages.get("player.dead-geiger")).thenReturn("Spent.");
+    place();
+    collect(EquipmentSlot.HAND);
+    verify(player).sendMessage("Found! Spent.");
+    verify(player, times(1)).sendMessage(anyString());
+  }
+
+  @Test
+  void aBlankHalfOfTheCollectionLineIsLeftOut() {
+    when(messages.get("player.found-source")).thenReturn("Found!", " ", "");
+    when(messages.get("player.dead-geiger")).thenReturn("", "Spent.", "");
+    for (int run = 0; run < 3; run++) {
+      place();
+      collect(EquipmentSlot.HAND);
+    }
+    verify(player).sendMessage("Found!");
+    verify(player).sendMessage("Spent.");
+    verify(player, times(2)).sendMessage(anyString());
+  }
+
+  @Test
   void offhandCollectionAlsoGrantsClonedRewardWithConfiguredAmount() {
     TierReward tier = new TierReward("rare", 1);
     tier.addItem(new ItemReward("m.TEST", 4));

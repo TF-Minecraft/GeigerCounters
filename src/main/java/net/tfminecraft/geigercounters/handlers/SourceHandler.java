@@ -305,13 +305,23 @@ public class SourceHandler {
         dropLimits.recordCollection(player);
         UsageStats.getInstance().recordSourceCollected();
         Bukkit.getPluginManager().callEvent(new GeigerSourceCollectEvent(player, collected));
-        notifyPlayerOfCollection(player);
         replaceGeigerWithDeadVersion(player, geigerSlot);
+        notifyPlayerOfCollection(player);
         giveReward(player);
     }
 
+    // One line: the find, then the spent counter. A blank half is left out.
     private void notifyPlayerOfCollection(Player player) {
-        player.sendMessage(config.getMessages().get("player.found-source"));
+        String found = config.getMessages().get("player.found-source");
+        String spent = config.getMessages().get("player.dead-geiger");
+        if (found.isBlank() || spent.isBlank()) {
+            String only = found.isBlank() ? spent : found;
+            if (!only.isBlank()) {
+                player.sendMessage(only);
+            }
+            return;
+        }
+        player.sendMessage(found + " " + spent);
     }
 
     private void replaceGeigerWithDeadVersion(Player player, EquipmentSlot geigerSlot) {
@@ -336,7 +346,6 @@ public class SourceHandler {
             deadGeiger.setAmount(1);
             giveItemOrDropLeftovers(player, deadGeiger);
             player.playSound(player.getLocation(), Sound.ENTITY_ITEM_BREAK, 1f, 1f);
-            player.sendMessage(config.getMessages().get("player.dead-geiger"));
         } catch (Exception e) {
             plugin.getLogger().warning("Failed to give dead Geiger Counter to " + player.getName() + ": " + e.getMessage());
         }

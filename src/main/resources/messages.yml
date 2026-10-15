@@ -14,13 +14,13 @@
 player:
   # Shown when a player finds their radioactive source, followed on the same
   # line by dead-geiger. Leave either blank to drop that half.
-  found-source: "&#AA00FFYou have found the source of Arcane Radiation!"
+  found-source: "&#AA00FFYou found the arcane source!"
 
   # Title of the signal bar shown while holding a detector
   signal-bar: "&#AA00FFArcane signal"
 
   # Second half of the found-source line: the counter burns out
-  dead-geiger: "&7Your Arcane Trace Detector has run out of fuel."
+  dead-geiger: "&7Your detector is spent."
 
   # Shown when a player has used up their drops for the current window
   # %max%    = drops allowed per window

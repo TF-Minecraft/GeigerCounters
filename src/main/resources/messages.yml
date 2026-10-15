@@ -17,7 +17,7 @@ player:
   found-source: "&#AA00FFYou found the arcane source!"
 
   # Title of the signal bar shown while holding a detector
-  signal-bar: "&#AA00FFArcane signal"
+  signal-bar: "&#AA00FFArcane Signal"
 
   # Second half of the found-source line: the counter burns out
   dead-geiger: "&7Your detector is spent."

@@ -37,8 +37,11 @@ public class BuriedChest implements Listener {
     // Player checks between resends
     static final int RESEND_CHECKS = 4;
 
-    // A cancelled dig this close to the cache means the ground is protected
+    // A cancelled dig this close to the cache's column, from just below the
+    // cache up to the surface over it, means the ground is protected
     private static final double PROTECTED_DIG_DISTANCE = 3.0;
+    private static final int PROTECTED_DIG_BELOW = 3;
+    private static final int PROTECTED_DIG_ABOVE = 16;
 
     private static final BlockFace[] FACINGS = {BlockFace.NORTH, BlockFace.EAST, BlockFace.SOUTH, BlockFace.WEST};
 
@@ -134,8 +137,12 @@ public class BuriedChest implements Listener {
             return;
         }
         Location dug = event.getBlock().getLocation();
-        if (dug.equals(current.block) || !dug.getWorld().equals(current.block.getWorld())
-            || dug.distance(current.block) > PROTECTED_DIG_DISTANCE) {
+        if (dug.equals(current.block) || !dug.getWorld().equals(current.block.getWorld())) {
+            return;
+        }
+        int height = dug.getBlockY() - current.block.getBlockY();
+        double across = Math.hypot(dug.getX() - current.block.getX(), dug.getZ() - current.block.getZ());
+        if (across > PROTECTED_DIG_DISTANCE || height < -PROTECTED_DIG_BELOW || height > PROTECTED_DIG_ABOVE) {
             return;
         }
         actions.groundProtected(event.getPlayer());

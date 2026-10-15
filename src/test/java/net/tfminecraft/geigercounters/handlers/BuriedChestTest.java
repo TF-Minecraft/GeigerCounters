@@ -167,32 +167,44 @@ class BuriedChestTest {
   }
 
   @Test
-  void aRefusedDigBesideTheCacheMeansTheGroundIsProtected() {
+  void aRefusedDigInTheCachesColumnMeansTheGroundIsProtected() {
     BlockBreakEvent event = mock(BlockBreakEvent.class);
     when(event.getPlayer()).thenReturn(player);
-    Block at5 = blockAt(new Location(world, 10, 63, -21));
-    when(event.getBlock()).thenReturn(at5);
+    Block over = blockAt(new Location(world, 10, 66, -21));
+    when(event.getBlock()).thenReturn(over);
     when(event.isCancelled()).thenReturn(true);
     chest.onProtectedDig(event);
     chest.show(player, cache);
     when(event.isCancelled()).thenReturn(false);
     chest.onProtectedDig(event);
     when(event.isCancelled()).thenReturn(true);
-    // The cache block itself, another world, too far away
-    Block at6 = blockAt(block);
-    when(event.getBlock()).thenReturn(at6);
-    chest.onProtectedDig(event);
-    Block at7 = blockAt(new Location(mock(World.class), 10, 63, -21));
-    when(event.getBlock()).thenReturn(at7);
-    chest.onProtectedDig(event);
-    Block at8 = blockAt(new Location(world, 10, 64, -21));
-    when(event.getBlock()).thenReturn(at8);
-    chest.onProtectedDig(event);
+    // The cache block itself, another world, too far across, too high, too low
+    for (Location elsewhere :
+        new Location[] {
+          block,
+          new Location(mock(World.class), 10, 63, -21),
+          new Location(world, 13, 60, -20),
+          new Location(world, 10, 77, -21),
+          new Location(world, 10, 56, -21)
+        }) {
+      Block dug = blockAt(elsewhere);
+      when(event.getBlock()).thenReturn(dug);
+      chest.onProtectedDig(event);
+    }
     verifyNoInteractions(actions);
-    Block at9 = blockAt(new Location(world, 10, 63, -21));
-    when(event.getBlock()).thenReturn(at9);
-    chest.onProtectedDig(event);
-    verify(actions).groundProtected(player);
-    assertEquals(3.0, new Location(world, 10, 63, -21).distance(block));
+    // Six blocks up, on the surface over a deep cache, and at the edges of the column
+    for (Location column :
+        new Location[] {
+          new Location(world, 10, 66, -21),
+          new Location(world, 10, 76, -21),
+          new Location(world, 10, 57, -21),
+          new Location(world, 13, 60, -21)
+        }) {
+      Block dug = blockAt(column);
+      when(event.getBlock()).thenReturn(dug);
+      chest.onProtectedDig(event);
+    }
+    verify(actions, times(4)).groundProtected(player);
   }
+
 }

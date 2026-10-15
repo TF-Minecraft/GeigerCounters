@@ -105,7 +105,7 @@ class SourceHandlerTest {
     verify(world).getChunkAtAsync(-1, -2, true);
     verify(world).getHighestBlockYAt(-2, -18, HeightMap.MOTION_BLOCKING_NO_LEAVES);
     verify(filter).check(new Location(world, -1.5, 71, -17.5));
-    verify(filter).checkBuried(world.getBlockAt(loc));
+    verify(filter).checkBuried(any(), eq(3));
     assertSame(loc, handler.getSource(hunter));
     assertFalse(handler.isPlacing(hunter));
     assertNull(handler.getSource(UUID.randomUUID()));
@@ -209,10 +209,51 @@ class SourceHandlerTest {
 
   @Test
   void spotsThatCannotHoldASealedCacheAreRetried() {
-    when(filter.checkBuried(any())).thenReturn(SpawnLocationFilter.Rejection.NOT_BURIED, null);
+    when(filter.checkBuried(any(), anyInt())).thenReturn(SpawnLocationFilter.Rejection.NOT_BURIED, null);
     assertNotNull(handler.placeNear(hunter, origin).join());
-    verify(filter, times(2)).check(any());
-    verify(filter, times(2)).checkBuried(any());
+    verify(filter, times(1)).check(any());
+    verify(filter, times(2)).checkBuried(any(), anyInt());
+  }
+
+  @Test
+  void withNoSealedSpotTheHunterWaitsAMinuteRatherThanGetAnExposedCache() throws Exception {
+    place();
+    clearInvocations(filter);
+    when(filter.checkBuried(any(), anyInt())).thenReturn(SpawnLocationFilter.Rejection.NOT_BURIED);
+    assertNull(handler.placeNear(hunter, origin).join());
+    assertNull(handler.getSource(hunter));
+    assertFalse(handler.isPlacing(hunter));
+    verify(filter, never()).check(any());
+    clearInvocations(world);
+    assertNull(handler.placeNear(hunter, origin).join());
+    verify(world, never()).getChunkAtAsync(anyInt(), anyInt(), anyBoolean());
+    var field = SourceHandler.class.getDeclaredField("retryAt");
+    field.setAccessible(true);
+    @SuppressWarnings("unchecked")
+    Map<UUID, Long> retryAt = (Map<UUID, Long>) field.get(handler);
+    retryAt.put(hunter, System.currentTimeMillis() - 1);
+    when(filter.checkBuried(any(), anyInt())).thenReturn(null);
+    assertNotNull(handler.placeNear(hunter, origin).join());
+    assertTrue(retryAt.isEmpty());
+  }
+
+  @Test
+  void clearingASourceLiftsTheWait() {
+    when(filter.checkBuried(any(), anyInt())).thenReturn(SpawnLocationFilter.Rejection.NOT_BURIED);
+    assertNull(handler.placeNear(hunter, origin).join());
+    handler.clear(hunter);
+    when(filter.checkBuried(any(), anyInt())).thenReturn(null);
+    assertNotNull(handler.placeNear(hunter, origin).join());
+  }
+
+  @Test
+  void exhaustedAttemptsFallBackToTheLastSealedCandidate() {
+    when(filter.checkBuried(any(), anyInt()))
+        .thenReturn(null, SpawnLocationFilter.Rejection.NOT_BURIED);
+    when(filter.check(any())).thenReturn(SpawnLocationFilter.Rejection.VOID);
+    assertNotNull(handler.placeNear(hunter, origin).join());
+    verify(filter, times(1)).check(any());
+    verify(filter, times(config.getSpawnFilters().getMaxAttempts())).checkBuried(any(), anyInt());
   }
 
   @Test
@@ -224,6 +265,7 @@ class SourceHandlerTest {
     Location loc = handler.placeNear(hunter, origin).join();
     assertEquals(65.5, loc.getY());
     verify(filter).check(new Location(world, -1.5, 69, -17.5));
+    verify(filter).checkBuried(any(), eq(3));
   }
 
   @Test
@@ -279,9 +321,9 @@ class SourceHandlerTest {
     assertEquals(34.5, loc.getX());
     assertEquals(65.5, loc.getZ());
     when(filter.check(any())).thenReturn(null);
-    when(filter.checkBuried(any())).thenReturn(SpawnLocationFilter.Rejection.NOT_BURIED);
+    when(filter.checkBuried(any(), anyInt())).thenReturn(SpawnLocationFilter.Rejection.NOT_BURIED);
     assertNotNull(handler.placeAt(hunter, 34, 65).join());
-    when(filter.checkBuried(any())).thenReturn(null);
+    when(filter.checkBuried(any(), anyInt())).thenReturn(null);
     assertNotNull(handler.placeAt(hunter, 34, 65).join());
   }
 

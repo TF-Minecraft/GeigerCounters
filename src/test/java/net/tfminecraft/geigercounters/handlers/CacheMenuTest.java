@@ -3,6 +3,7 @@ package net.tfminecraft.geigercounters.handlers;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import net.kyori.adventure.text.Component;
@@ -12,6 +13,7 @@ import net.tfminecraft.geigercounters.config.Messages;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.HumanEntity;
 import org.bukkit.entity.Player;
+import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
@@ -40,6 +42,8 @@ class CacheMenuTest {
     when(player.getInventory()).thenReturn(pockets);
     when(pockets.addItem(any(ItemStack.class))).thenReturn(new HashMap<>());
     window = mock(Inventory.class);
+    when(window.getContents()).thenReturn(new ItemStack[0]);
+    when(player.openInventory(any(Inventory.class))).thenReturn(mock(InventoryView.class));
   }
 
   InventoryHolder open(ItemStack reward) {
@@ -127,5 +131,60 @@ class CacheMenuTest {
     verify(pockets).addItem(left);
     verify(player).closeInventory();
     verify(browsing, never()).closeInventory();
+  }
+
+  @Test
+  void aRefusedWindowHandsTheRewardOverAtOnce() {
+    ItemStack reward = item(false);
+    when(player.openInventory(any(Inventory.class))).thenReturn(null);
+    when(window.getContents()).thenReturn(new ItemStack[] {reward});
+    open(reward);
+    verify(pockets).addItem(reward);
+    verify(window).clear();
+  }
+
+  PlayerDeathEvent death(Inventory top, boolean keep, List<ItemStack> drops) {
+    InventoryView view = mock(InventoryView.class);
+    when(view.getTopInventory()).thenReturn(top);
+    when(player.getOpenInventory()).thenReturn(view);
+    PlayerDeathEvent event = mock(PlayerDeathEvent.class);
+    when(event.getEntity()).thenReturn(player);
+    when(event.getKeepInventory()).thenReturn(keep);
+    when(event.getDrops()).thenReturn(drops);
+    return event;
+  }
+
+  @Test
+  void dyingWithTheCacheOpenDropsWhatIsInIt() {
+    InventoryHolder holder = open(null);
+    ItemStack left = item(false);
+    when(window.getHolder()).thenReturn(holder);
+    when(window.getContents()).thenReturn(new ItemStack[] {left});
+    List<ItemStack> drops = new ArrayList<>();
+    menu.onDeath(death(window, false, drops));
+    assertEquals(List.of(left), drops);
+    verify(window).clear();
+    verify(pockets, never()).addItem(any(ItemStack.class));
+  }
+
+  @Test
+  void keptInventoriesKeepTheCacheContentsToo() {
+    InventoryHolder holder = open(null);
+    ItemStack left = item(false);
+    when(window.getHolder()).thenReturn(holder);
+    when(window.getContents()).thenReturn(new ItemStack[] {left});
+    List<ItemStack> drops = new ArrayList<>();
+    menu.onDeath(death(window, true, drops));
+    assertTrue(drops.isEmpty());
+    verify(pockets).addItem(left);
+  }
+
+  @Test
+  void deathWithAnyOtherWindowIsIgnored() {
+    Inventory chest = mock(Inventory.class);
+    List<ItemStack> drops = new ArrayList<>();
+    menu.onDeath(death(chest, false, drops));
+    assertTrue(drops.isEmpty());
+    verify(chest, never()).clear();
   }
 }

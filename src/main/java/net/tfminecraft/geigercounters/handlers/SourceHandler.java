@@ -61,11 +61,15 @@ public class SourceHandler {
     // Highest a tree trunk is followed down to the ground beneath it
     private static final int MAX_TRUNK_HEIGHT = 32;
 
-    // Overworld trunks stand on the ground a cache is buried in
-    private static final Set<Material> TRUNKS = EnumSet.of(
+    // Trunks and natural cover standing on the ground a cache is buried in
+    private static final Set<Material> OVERGROWTH = EnumSet.of(
         Material.OAK_LOG, Material.SPRUCE_LOG, Material.BIRCH_LOG, Material.JUNGLE_LOG, Material.ACACIA_LOG,
         Material.DARK_OAK_LOG, Material.MANGROVE_LOG, Material.MANGROVE_ROOTS, Material.CHERRY_LOG,
-        Material.PALE_OAK_LOG, Material.MUSHROOM_STEM);
+        Material.PALE_OAK_LOG, Material.MUSHROOM_STEM, Material.SNOW, Material.MOSS_CARPET,
+        Material.PALE_MOSS_CARPET, Material.CACTUS, Material.BAMBOO, Material.PUMPKIN, Material.MELON);
+
+    // When no spot near a hunter holds a sealed cache, how long before trying again
+    private static final long RETRY_MILLIS = 60_000L;
 
     // Random spots tried for one that is both in the ring and inside the area
     private static final int SPOT_TRIES = 100;
@@ -87,6 +91,9 @@ public class SourceHandler {
 
     // Hunter -> placement still resolving chunk loads
     private final Map<UUID, CompletableFuture<Location>> pending = new HashMap<>();
+
+    // Hunter -> when a search that found no sealed spot may run again
+    private final Map<UUID, Long> retryAt = new HashMap<>();
 
     public SourceHandler(JavaPlugin plugin, GeigerConfiguration config, ItemAPI api,
                          SpawnLocationFilter spawnFilter, DropLimitManager dropLimits, CacheMenu cacheMenu) {
@@ -123,8 +130,10 @@ public class SourceHandler {
     // terrain, so attempts run one at a time through getChunkAtAsync instead
     // of stalling the main thread.
     //
-    // If no candidate passes within the attempt budget the last one is used
-    // anyway, so the hunter always gets a source. When no part of the ring lies
+    // If no candidate passes within the attempt budget, the last one that was
+    // sealed in natural ground is used anyway. A cache is never placed where it
+    // would show, so with no sealed candidate at all the hunter gets nothing
+    // and the search waits a minute before running again. When no part of the ring lies
     // inside the area (the hunter is outside it) nothing is placed, any old
     // source is kept, and the future completes with null.
     //
@@ -135,6 +144,10 @@ public class SourceHandler {
         CompletableFuture<Location> running = pending.get(hunter);
         if (running != null) {
             return running;
+        }
+        Long retry = retryAt.get(hunter);
+        if (retry != null && System.currentTimeMillis() < retry) {
+            return CompletableFuture.completedFuture(null);
         }
 
         double[] first = randomSpotNear(origin.getX(), origin.getZ());
@@ -148,7 +161,7 @@ public class SourceHandler {
 
         CompletableFuture<Location> result = new CompletableFuture<>();
         pending.put(hunter, result);
-        attemptPlacement(hunter, origin.getX(), origin.getZ(), first, 1, result);
+        attemptPlacement(hunter, origin.getX(), origin.getZ(), first, 1, null, result);
         return result;
     }
 
@@ -172,8 +185,9 @@ public class SourceHandler {
         return null;
     }
 
+    // <sealed> is the last candidate so far that was sealed in natural ground
     private void attemptPlacement(UUID hunter, double originX, double originZ, double[] spot, int attempt,
-                                  CompletableFuture<Location> result) {
+                                  Location sealed, CompletableFuture<Location> result) {
         double x = spot[0];
         double z = spot[1];
         int maxAttempts = config.getSpawnFilters().getMaxAttempts();
@@ -190,7 +204,9 @@ public class SourceHandler {
             }
 
             Candidate candidate = candidateAt(x, z);
-            SpawnLocationFilter.Rejection rejection = candidate.check(spawnFilter);
+            SpawnLocationFilter.Rejection burial = candidate.checkBuried(spawnFilter);
+            SpawnLocationFilter.Rejection rejection = burial != null ? burial : spawnFilter.check(candidate.surface());
+            Location fallback = burial == null ? candidate.cache() : sealed;
 
             if (rejection == null) {
                 applySource(hunter, candidate.cache(), attempt, result);
@@ -198,16 +214,25 @@ public class SourceHandler {
             }
 
             double[] next = attempt >= maxAttempts ? null : randomSpotNear(originX, originZ);
-            if (next == null) {
-                plugin.getLogger().warning(String.format(
-                    "No valid source location found after %d attempts (last rejection: %s). "
-                        + "Using the last candidate - check your source.spawn-filters settings.",
-                    attempt, rejection.getDescription()));
-                applySource(hunter, candidate.cache(), attempt, result);
+            if (next != null) {
+                attemptPlacement(hunter, originX, originZ, next, attempt + 1, fallback, result);
                 return;
             }
 
-            attemptPlacement(hunter, originX, originZ, next, attempt + 1, result);
+            if (fallback == null) {
+                plugin.getLogger().warning(String.format(
+                    "No sealed source location found for %s after %d attempts (last rejection: %s). "
+                        + "Trying again in a minute.", hunter, attempt, rejection.getDescription()));
+                pending.remove(hunter);
+                retryAt.put(hunter, System.currentTimeMillis() + RETRY_MILLIS);
+                result.complete(null);
+                return;
+            }
+            plugin.getLogger().warning(String.format(
+                "No valid source location found after %d attempts (last rejection: %s). "
+                    + "Using the last sealed candidate - check your source.spawn-filters settings.",
+                attempt, rejection.getDescription()));
+            applySource(hunter, fallback, attempt, result);
         });
     }
 
@@ -232,7 +257,10 @@ public class SourceHandler {
 
             Candidate candidate = candidateAt(x, z);
 
-            SpawnLocationFilter.Rejection rejection = candidate.check(spawnFilter);
+            SpawnLocationFilter.Rejection rejection = candidate.checkBuried(spawnFilter);
+            if (rejection == null) {
+                rejection = spawnFilter.check(candidate.surface());
+            }
             if (rejection != null) {
                 plugin.getLogger().warning(String.format(
                     "Source manually moved to a location that fails the spawn filters (%s).",
@@ -250,6 +278,7 @@ public class SourceHandler {
     // ====================================
     public void clear(UUID hunter) {
         pending.remove(hunter);
+        retryAt.remove(hunter);
         if (sources.remove(hunter) != null) {
             save();
         }
@@ -265,7 +294,8 @@ public class SourceHandler {
     //
     // The column is kept one block inside its chunk, so the cache's neighbours
     // are in the chunk already loaded. Leaves are skipped by the height map and
-    // tree trunks are followed down, so the ground is the soil the tree grows in.
+    // trunks and snow or moss cover are followed down, so the ground is the soil
+    // beneath them.
     // ====================================
     private Candidate candidateAt(double x, double z) {
         World world = config.getWorld();
@@ -274,7 +304,7 @@ public class SourceHandler {
 
         int groundY = world.getHighestBlockYAt(blockX, blockZ, HeightMap.MOTION_BLOCKING_NO_LEAVES);
         int trunkBottom = groundY - MAX_TRUNK_HEIGHT;
-        while (groundY > trunkBottom && TRUNKS.contains(world.getBlockAt(blockX, groundY, blockZ).getType())) {
+        while (groundY > trunkBottom && OVERGROWTH.contains(world.getBlockAt(blockX, groundY, blockZ).getType())) {
             groundY--;
         }
 
@@ -303,6 +333,7 @@ public class SourceHandler {
 
     private void applySource(UUID hunter, Location location, int attempts, CompletableFuture<Location> result) {
         pending.remove(hunter);
+        retryAt.remove(hunter);
         sources.put(hunter, new Source(location, System.currentTimeMillis()));
         save();
 
@@ -577,13 +608,13 @@ public class SourceHandler {
     private record Source(Location location, long placedAt) {
     }
 
-    // Where the hunter stands over the cache, and the cache itself
+    // Where the hunter stands over the cache, and the cache itself. The
+    // surface rules look at the ground; the burial rule at the cache and the
+    // cover over it, so a cache never sits under a floor or a path.
     private record Candidate(Location surface, Location cache) {
 
-        // The surface rules look at the ground; the burial rule at the cache
-        SpawnLocationFilter.Rejection check(SpawnLocationFilter filter) {
-            SpawnLocationFilter.Rejection rejection = filter.check(surface);
-            return rejection != null ? rejection : filter.checkBuried(cache.getBlock());
+        SpawnLocationFilter.Rejection checkBuried(SpawnLocationFilter filter) {
+            return filter.checkBuried(cache.getBlock(), surface.getBlockY() - 1 - cache.getBlockY());
         }
     }
 }

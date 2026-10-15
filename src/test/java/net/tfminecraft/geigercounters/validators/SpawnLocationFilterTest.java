@@ -249,14 +249,14 @@ class SpawnLocationFilterTest {
     when(cache.getType()).thenReturn(Material.DEEPSLATE_IRON_ORE);
     when(cache.getRelative(any(BlockFace.class))).thenReturn(side);
     when(side.getType()).thenReturn(Material.DIRT);
-    assertNull(filter.checkBuried(cache));
+    assertNull(filter.checkBuried(cache, 1));
     verify(cache, times(6)).getRelative(any(BlockFace.class));
     when(side.getType()).thenReturn(Material.AIR);
-    assertEquals(SpawnLocationFilter.Rejection.NOT_BURIED, filter.checkBuried(cache));
+    assertEquals(SpawnLocationFilter.Rejection.NOT_BURIED, filter.checkBuried(cache, 1));
     when(side.getType()).thenReturn(Material.COBBLESTONE);
-    assertEquals(SpawnLocationFilter.Rejection.NOT_BURIED, filter.checkBuried(cache));
+    assertEquals(SpawnLocationFilter.Rejection.NOT_BURIED, filter.checkBuried(cache, 1));
     when(cache.getType()).thenReturn(Material.OAK_PLANKS);
-    assertEquals(SpawnLocationFilter.Rejection.NOT_BURIED, filter.checkBuried(cache));
+    assertEquals(SpawnLocationFilter.Rejection.NOT_BURIED, filter.checkBuried(cache, 1));
     assertEquals("cache not sealed in natural ground", SpawnLocationFilter.Rejection.NOT_BURIED.getDescription());
   }
 
@@ -268,8 +268,25 @@ class SpawnLocationFilterTest {
     when(cave.getType()).thenReturn(Material.CAVE_AIR);
     when(cache.getRelative(any(BlockFace.class))).thenReturn(ground);
     when(cache.getRelative(BlockFace.WEST)).thenReturn(cave);
-    assertEquals(SpawnLocationFilter.Rejection.NOT_BURIED, filter.checkBuried(cache));
+    assertEquals(SpawnLocationFilter.Rejection.NOT_BURIED, filter.checkBuried(cache, 1));
     assertTrue(SpawnLocationFilter.isNaturalGround(ground));
     assertFalse(SpawnLocationFilter.isNaturalGround(cave));
+  }
+
+  @Test
+  void everyBlockOfCoverUpToTheSurfaceMustBeNaturalToo() {
+    Block cache = mock(Block.class), ground = mock(Block.class), floor = mock(Block.class);
+    when(cache.getType()).thenReturn(Material.STONE);
+    when(ground.getType()).thenReturn(Material.DIRT);
+    when(floor.getType()).thenReturn(Material.OAK_PLANKS);
+    when(cache.getRelative(any(BlockFace.class))).thenReturn(ground);
+    when(cache.getRelative(eq(BlockFace.UP), anyInt())).thenReturn(ground);
+    assertNull(filter.checkBuried(cache, 4));
+    verify(cache).getRelative(BlockFace.UP, 2);
+    verify(cache).getRelative(BlockFace.UP, 4);
+    verify(cache, never()).getRelative(BlockFace.UP, 5);
+    // A floor laid on the ground over the cache
+    when(cache.getRelative(BlockFace.UP, 4)).thenReturn(floor);
+    assertEquals(SpawnLocationFilter.Rejection.NOT_BURIED, filter.checkBuried(cache, 4));
   }
 }

@@ -4,7 +4,9 @@ import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
@@ -18,7 +20,8 @@ import java.util.List;
 // The chest window shown when a hunter opens their cache.
 //
 // The window is not backed by any block, so whatever is still in it when it
-// closes (or the server stops) goes to the player, never lost.
+// closes (or the server stops) goes to the player, never lost. A player who
+// dies with it open drops it with the rest of their things.
 // ====================================
 public class CacheMenu implements Listener {
 
@@ -50,7 +53,10 @@ public class CacheMenu implements Listener {
         if (reward != null) {
             inventory.setItem(REWARD_SLOT, reward);
         }
-        player.openInventory(inventory);
+        // Another plugin may refuse the window; the reward is theirs regardless
+        if (player.openInventory(inventory) == null) {
+            empty(player, inventory);
+        }
     }
 
     @EventHandler
@@ -58,6 +64,23 @@ public class CacheMenu implements Listener {
         if (event.getInventory().getHolder() instanceof Holder && event.getPlayer() instanceof Player player) {
             empty(player, event.getInventory());
         }
+    }
+
+    // The window is still open when the death drops are gathered, and closing
+    // it afterwards would return its contents to an inventory about to be
+    // cleared. Lowest priority so graves and the like collect them too.
+    @EventHandler(priority = EventPriority.LOWEST)
+    public void onDeath(PlayerDeathEvent event) {
+        Player player = event.getEntity();
+        Inventory top = player.getOpenInventory().getTopInventory();
+        if (!(top.getHolder() instanceof Holder)) {
+            return;
+        }
+        if (event.getKeepInventory()) {
+            empty(player, top);
+            return;
+        }
+        event.getDrops().addAll(take(top));
     }
 
     // ====================================
@@ -74,6 +97,13 @@ public class CacheMenu implements Listener {
     }
 
     private static void empty(Player player, Inventory inventory) {
+        for (ItemStack item : take(inventory)) {
+            SourceHandler.giveItemOrDropLeftovers(player, item);
+        }
+    }
+
+    // Everything in the window, which is left empty
+    private static List<ItemStack> take(Inventory inventory) {
         List<ItemStack> left = new ArrayList<>();
         for (ItemStack item : inventory.getContents()) {
             if (item != null && !item.isEmpty()) {
@@ -81,9 +111,7 @@ public class CacheMenu implements Listener {
             }
         }
         inventory.clear();
-        for (ItemStack item : left) {
-            SourceHandler.giveItemOrDropLeftovers(player, item);
-        }
+        return left;
     }
 
     // Marks a cache window; the inventory is set once Bukkit has made it

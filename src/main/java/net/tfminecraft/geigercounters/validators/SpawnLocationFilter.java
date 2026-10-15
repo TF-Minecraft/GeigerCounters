@@ -103,14 +103,20 @@ public class SpawnLocationFilter {
 
     // ====================================
     // Returns null if a cache at <cache> would sit in natural ground with
-    // natural ground on all six sides, so nobody sees it without digging
+    // natural ground on all six sides and in all <cover> blocks above it, up
+    // to the surface, so nobody sees it without digging and no build is over it
     // ====================================
-    public Rejection checkBuried(Block cache) {
+    public Rejection checkBuried(Block cache, int cover) {
         if (!isNaturalGround(cache)) {
             return Rejection.NOT_BURIED;
         }
         for (BlockFace side : SIDES) {
             if (!isNaturalGround(cache.getRelative(side))) {
+                return Rejection.NOT_BURIED;
+            }
+        }
+        for (int above = 2; above <= cover; above++) {
+            if (!isNaturalGround(cache.getRelative(BlockFace.UP, above))) {
                 return Rejection.NOT_BURIED;
             }
         }

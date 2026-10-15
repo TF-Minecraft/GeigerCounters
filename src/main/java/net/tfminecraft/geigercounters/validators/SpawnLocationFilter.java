@@ -5,14 +5,19 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
 import org.bukkit.plugin.java.JavaPlugin;
 import net.tfminecraft.geigercounters.config.GeigerConfiguration;
 import net.tfminecraft.geigercounters.hooks.WorldGuardHook;
 
+import java.util.EnumSet;
+import java.util.Set;
+
 // ====================================
 // Decides whether a candidate source location is allowed to be used
 // Rejects water/lava, void (no ground), blacklisted blocks, locations too
-// close to world spawn, and locations inside blacklisted WorldGuard regions
+// close to world spawn, locations inside blacklisted WorldGuard regions, and
+// caches that would not sit sealed inside natural ground
 // ====================================
 public class SpawnLocationFilter {
 
@@ -24,7 +29,8 @@ public class SpawnLocationFilter {
         LIQUID("ground is water or lava"),
         BLOCKED_BLOCK("ground block is blacklisted"),
         TOO_CLOSE_TO_SPAWN("too close to world spawn"),
-        WORLDGUARD_REGION("inside a blacklisted WorldGuard region");
+        WORLDGUARD_REGION("inside a blacklisted WorldGuard region"),
+        NOT_BURIED("cache not sealed in natural ground");
 
         private final String description;
 
@@ -36,6 +42,25 @@ public class SpawnLocationFilter {
             return description;
         }
     }
+
+    // Untouched terrain a cache may be buried in. Player builds are left out,
+    // so a cache never lands under, or inside the walls of, someone's base.
+    private static final Set<Material> NATURAL_GROUND = EnumSet.of(
+        Material.STONE, Material.GRANITE, Material.DIORITE, Material.ANDESITE, Material.DEEPSLATE,
+        Material.TUFF, Material.CALCITE, Material.DRIPSTONE_BLOCK,
+        Material.DIRT, Material.COARSE_DIRT, Material.ROOTED_DIRT, Material.GRASS_BLOCK, Material.PODZOL,
+        Material.MYCELIUM, Material.MUD, Material.MOSS_BLOCK, Material.CLAY, Material.GRAVEL,
+        Material.SAND, Material.RED_SAND, Material.SANDSTONE, Material.RED_SANDSTONE, Material.SNOW_BLOCK,
+        Material.TERRACOTTA, Material.WHITE_TERRACOTTA, Material.ORANGE_TERRACOTTA, Material.YELLOW_TERRACOTTA,
+        Material.LIGHT_GRAY_TERRACOTTA, Material.BROWN_TERRACOTTA, Material.RED_TERRACOTTA,
+        Material.COAL_ORE, Material.IRON_ORE, Material.COPPER_ORE, Material.GOLD_ORE, Material.REDSTONE_ORE,
+        Material.LAPIS_ORE, Material.DIAMOND_ORE, Material.EMERALD_ORE,
+        Material.DEEPSLATE_COAL_ORE, Material.DEEPSLATE_IRON_ORE, Material.DEEPSLATE_COPPER_ORE,
+        Material.DEEPSLATE_GOLD_ORE, Material.DEEPSLATE_REDSTONE_ORE, Material.DEEPSLATE_LAPIS_ORE,
+        Material.DEEPSLATE_DIAMOND_ORE, Material.DEEPSLATE_EMERALD_ORE);
+
+    private static final BlockFace[] SIDES = {
+        BlockFace.UP, BlockFace.DOWN, BlockFace.NORTH, BlockFace.SOUTH, BlockFace.EAST, BlockFace.WEST};
 
     private final JavaPlugin plugin;
     private final GeigerConfiguration config;
@@ -74,6 +99,26 @@ public class SpawnLocationFilter {
         }
 
         return null;
+    }
+
+    // ====================================
+    // Returns null if a cache at <cache> would sit in natural ground with
+    // natural ground on all six sides, so nobody sees it without digging
+    // ====================================
+    public Rejection checkBuried(Block cache) {
+        if (!isNaturalGround(cache)) {
+            return Rejection.NOT_BURIED;
+        }
+        for (BlockFace side : SIDES) {
+            if (!isNaturalGround(cache.getRelative(side))) {
+                return Rejection.NOT_BURIED;
+            }
+        }
+        return null;
+    }
+
+    public static boolean isNaturalGround(Block block) {
+        return NATURAL_GROUND.contains(block.getType());
     }
 
     // ====================================

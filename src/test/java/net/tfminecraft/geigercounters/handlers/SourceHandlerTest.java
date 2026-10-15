@@ -16,6 +16,7 @@ import net.tfminecraft.geigercounters.models.*;
 import net.tfminecraft.geigercounters.validators.SpawnLocationFilter;
 import net.tfminecraft.tlibs.objects.api.ItemAPI;
 import org.bukkit.*;
+import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.*;
 import org.bukkit.plugin.PluginManager;
@@ -32,7 +33,9 @@ class SourceHandlerTest {
   ItemAPI api;
   SpawnLocationFilter filter;
   DropLimitManager limits;
+  CacheMenu menu;
   World world;
+  Block ground;
   SourceHandler handler;
   Player player;
   PlayerInventory inventory;
@@ -50,7 +53,14 @@ class SourceHandlerTest {
     api = mock(ItemAPI.class, RETURNS_DEEP_STUBS);
     filter = mock(SpawnLocationFilter.class);
     limits = mock(DropLimitManager.class);
+    menu = mock(CacheMenu.class);
     world = mock(World.class);
+    ground = mock(Block.class);
+    when(ground.getType()).thenReturn(Material.STONE);
+    when(world.getBlockAt(anyInt(), anyInt(), anyInt())).thenReturn(ground);
+    when(world.getMinHeight()).thenReturn(-64);
+    when(config.getMinBurialDepth()).thenReturn(3);
+    when(config.getMaxBurialDepth()).thenReturn(3);
     when(world.getName()).thenReturn("world");
     when(config.getWorld()).thenReturn(world);
     when(config.getSpawnFilters()).thenReturn(new GeigerConfiguration.SpawnFilterConfig());
@@ -58,10 +68,9 @@ class SourceHandlerTest {
     when(config.getMaxX()).thenReturn(5000.0);
     when(config.getMinZ()).thenReturn(-5000.0);
     when(config.getMaxZ()).thenReturn(5000.0);
-    when(world.getHighestBlockYAt(anyInt(), anyInt())).thenReturn(70);
+    when(world.getHighestBlockYAt(anyInt(), anyInt(), eq(HeightMap.MOTION_BLOCKING_NO_LEAVES))).thenReturn(70);
     when(world.getChunkAtAsync(anyInt(), anyInt(), eq(true)))
         .thenReturn(CompletableFuture.completedFuture(mock(Chunk.class)));
-    when(config.getCollectionDistance()).thenReturn(20.0);
     messages = mock(Messages.class);
     when(config.getMessages()).thenReturn(messages);
     when(messages.get(anyString(), any(Object[].class))).thenReturn("message");
@@ -78,7 +87,7 @@ class SourceHandlerTest {
     origin = new Location(world, -0.5, 71, -16.5);
     when(player.getLocation()).thenReturn(origin);
     when(limits.canCollect(player)).thenReturn(true);
-    handler = new SourceHandler(plugin, config, api, filter, limits);
+    handler = new SourceHandler(plugin, config, api, filter, limits, menu);
   }
 
   void place() {
@@ -86,14 +95,17 @@ class SourceHandlerTest {
   }
 
   @Test
-  void placementWithZeroRingFloorsNegativeBlockCoordinatesAndSnapsToSurface() {
+  void placementWithZeroRingFloorsNegativeBlockCoordinatesAndBuriesUnderTheGround() {
     Location loc = handler.placeNear(hunter, origin).join();
-    assertEquals(-0.5, loc.getX());
-    assertEquals(-16.5, loc.getZ());
-    assertEquals(71, loc.getY());
+    // Blocks -1 and -17 sit on their chunks' edges, so they move one block in
+    assertEquals(-1.5, loc.getX());
+    assertEquals(-17.5, loc.getZ());
+    assertEquals(67.5, loc.getY());
     assertSame(world, loc.getWorld());
     verify(world).getChunkAtAsync(-1, -2, true);
-    verify(world).getHighestBlockYAt(-1, -17);
+    verify(world).getHighestBlockYAt(-2, -18, HeightMap.MOTION_BLOCKING_NO_LEAVES);
+    verify(filter).check(new Location(world, -1.5, 71, -17.5));
+    verify(filter).checkBuried(world.getBlockAt(loc));
     assertSame(loc, handler.getSource(hunter));
     assertFalse(handler.isPlacing(hunter));
     assertNull(handler.getSource(UUID.randomUUID()));
@@ -107,7 +119,8 @@ class SourceHandlerTest {
     for (int run = 0; run < 200; run++) {
       Location loc = handler.placeNear(hunter, origin).join();
       double distance = Math.hypot(loc.getX() - origin.getX(), loc.getZ() - origin.getZ());
-      assertTrue(distance >= 150 - 1e-9 && distance <= 500 + 1e-9, "distance " + distance);
+      // The cache is centred in a block kept off the chunk edge, up to two blocks off the spot
+      assertTrue(distance >= 148 && distance <= 502, "distance " + distance);
     }
   }
 
@@ -122,9 +135,9 @@ class SourceHandlerTest {
     for (int run = 0; run < 100; run++) {
       Location loc = handler.placeNear(hunter, origin).join();
       double distance = Math.hypot(loc.getX() - origin.getX(), loc.getZ() - origin.getZ());
-      assertTrue(distance >= 150 - 1e-9 && distance <= 500 + 1e-9, "distance " + distance);
-      assertTrue(loc.getX() >= -1 && loc.getX() <= 1000);
-      assertTrue(loc.getZ() >= -17 && loc.getZ() <= 1000);
+      assertTrue(distance >= 148 && distance <= 502, "distance " + distance);
+      assertTrue(loc.getX() >= -3 && loc.getX() <= 1002);
+      assertTrue(loc.getZ() >= -19 && loc.getZ() <= 1002);
     }
   }
 
@@ -158,8 +171,8 @@ class SourceHandlerTest {
     field.set(handler, random);
     when(filter.check(any())).thenReturn(SpawnLocationFilter.Rejection.LIQUID);
     Location loc = handler.placeNear(hunter, new Location(world, 0, 64, 0)).join();
-    assertEquals(10, loc.getX(), 1e-9);
-    assertEquals(0, loc.getZ(), 1e-9);
+    assertEquals(10.5, loc.getX(), 1e-9);
+    assertEquals(1.5, loc.getZ(), 1e-9);
     verify(filter, times(1)).check(any());
   }
 
@@ -183,8 +196,8 @@ class SourceHandlerTest {
     UUID other = UUID.randomUUID();
     place();
     handler.placeAt(other, 30, 40).join();
-    assertEquals(-0.5, handler.getSource(hunter).getX());
-    assertEquals(30, handler.getSource(other).getX());
+    assertEquals(-1.5, handler.getSource(hunter).getX());
+    assertEquals(30.5, handler.getSource(other).getX());
   }
 
   @Test
@@ -192,6 +205,55 @@ class SourceHandlerTest {
     when(filter.check(any())).thenReturn(SpawnLocationFilter.Rejection.LIQUID, null);
     assertNotNull(handler.placeNear(hunter, origin).join());
     verify(filter, times(2)).check(any());
+  }
+
+  @Test
+  void spotsThatCannotHoldASealedCacheAreRetried() {
+    when(filter.checkBuried(any())).thenReturn(SpawnLocationFilter.Rejection.NOT_BURIED, null);
+    assertNotNull(handler.placeNear(hunter, origin).join());
+    verify(filter, times(2)).check(any());
+    verify(filter, times(2)).checkBuried(any());
+  }
+
+  @Test
+  void trunksAreFollowedDownToTheGroundTheTreeStandsIn() {
+    Block log = mock(Block.class);
+    when(log.getType()).thenReturn(Material.OAK_LOG);
+    when(world.getBlockAt(-2, 70, -18)).thenReturn(log);
+    when(world.getBlockAt(-2, 69, -18)).thenReturn(log);
+    Location loc = handler.placeNear(hunter, origin).join();
+    assertEquals(65.5, loc.getY());
+    verify(filter).check(new Location(world, -1.5, 69, -17.5));
+  }
+
+  @Test
+  void aColumnOfTrunkIsOnlyFollowedSoFar() {
+    Block log = mock(Block.class);
+    when(log.getType()).thenReturn(Material.MUSHROOM_STEM);
+    when(world.getBlockAt(anyInt(), anyInt(), anyInt())).thenReturn(log);
+    assertEquals(35.5, handler.placeNear(hunter, origin).join().getY());
+  }
+
+  @Test
+  void burialDepthIsRolledBetweenTheLimitsAndNeverBelowTheWorld() throws Exception {
+    when(config.getMaxBurialDepth()).thenReturn(6);
+    Random random = mock(Random.class);
+    when(random.nextInt(4)).thenReturn(3, 0);
+    var field = SourceHandler.class.getDeclaredField("random");
+    field.setAccessible(true);
+    field.set(handler, random);
+    assertEquals(64.5, handler.placeNear(hunter, origin).join().getY());
+    when(world.getHighestBlockYAt(anyInt(), anyInt(), eq(HeightMap.MOTION_BLOCKING_NO_LEAVES))).thenReturn(-63);
+    assertEquals(-63.5, handler.placeNear(hunter, origin).join().getY());
+  }
+
+  @Test
+  void chunkEdgeColumnsMoveOneBlockInwards() {
+    assertEquals(1, SourceHandler.insideChunk(0));
+    assertEquals(14, SourceHandler.insideChunk(15));
+    assertEquals(7, SourceHandler.insideChunk(7));
+    assertEquals(-15, SourceHandler.insideChunk(-16));
+    assertEquals(-2, SourceHandler.insideChunk(-1));
   }
 
   @Test
@@ -214,8 +276,13 @@ class SourceHandlerTest {
   void explicitPlacementBypassesFilters() {
     when(filter.check(any())).thenReturn(SpawnLocationFilter.Rejection.BLOCKED_BLOCK);
     Location loc = handler.placeAt(hunter, 34, 65).join();
-    assertEquals(34, loc.getX());
-    assertEquals(65, loc.getZ());
+    assertEquals(34.5, loc.getX());
+    assertEquals(65.5, loc.getZ());
+    when(filter.check(any())).thenReturn(null);
+    when(filter.checkBuried(any())).thenReturn(SpawnLocationFilter.Rejection.NOT_BURIED);
+    assertNotNull(handler.placeAt(hunter, 34, 65).join());
+    when(filter.checkBuried(any())).thenReturn(null);
+    assertNotNull(handler.placeAt(hunter, 34, 65).join());
   }
 
   @Test
@@ -227,11 +294,10 @@ class SourceHandlerTest {
   }
 
   @Test
-  void distanceAndMissingSourceGuardsDoNotConsumeLimits() {
-    handler.tryCollectSource(player, hunter, 1, EquipmentSlot.HAND);
-    place();
-    handler.tryCollectSource(player, hunter, 20.01, EquipmentSlot.HAND);
+  void openingWithoutASourceDoesNotConsumeLimits() {
+    handler.open(player, hunter, EquipmentSlot.HAND);
     verifyNoInteractions(limits);
+    verifyNoInteractions(menu);
   }
 
   @Test
@@ -247,7 +313,7 @@ class SourceHandlerTest {
     randomChunk.complete(mock(Chunk.class));
     assertNull(random.join());
     assertSame(manual.join(), handler.getSource(hunter));
-    assertEquals(30, handler.getSource(hunter).getX());
+    assertEquals(30.5, handler.getSource(hunter).getX());
   }
 
   @Test
@@ -271,32 +337,34 @@ class SourceHandlerTest {
   @Test
   void sourcesSurviveARestart() {
     place();
-    SourceHandler restarted = new SourceHandler(plugin, config, api, filter, limits);
+    SourceHandler restarted = new SourceHandler(plugin, config, api, filter, limits, menu);
     try (var b = mockStatic(Bukkit.class)) {
       b.when(() -> Bukkit.getWorld("world")).thenReturn(world);
       restarted.load();
     }
     Location loaded = restarted.getSource(hunter);
-    assertEquals(new Location(world, -0.5, 71, -16.5), loaded);
+    assertEquals(new Location(world, -1.5, 67.5, -17.5), loaded);
   }
 
   @Test
-  void loadSkipsBadAndUnloadedEntriesButKeepsOldHunts() throws Exception {
+  void loadSkipsBadUnloadedAndSurfaceEntriesButKeepsOldHunts() throws Exception {
     handler.load();
     Files.writeString(directory.resolve("sources.yml"), "other: 1\n");
     handler.load();
     UUID old = UUID.randomUUID(), unloaded = UUID.randomUUID(), kept = UUID.randomUUID();
+    UUID surface = UUID.randomUUID();
     long now = System.currentTimeMillis();
     Files.writeString(
         directory.resolve("sources.yml"),
         String.join(
             "\n",
             "sources:",
-            "  not-a-uuid: {world: world, x: 1, y: 2, z: 3, placed: " + now + "}",
+            "  not-a-uuid: {world: world, x: 1, y: 2, z: 3, placed: " + now + ", buried: true}",
             "  " + UUID.randomUUID() + ": scalar",
-            "  " + old + ": {world: world, x: 1, y: 2, z: 3, placed: " + (now - 31L * 86_400_000L) + "}",
-            "  " + unloaded + ": {world: gone, x: 1, y: 2, z: 3, placed: " + now + "}",
-            "  " + kept + ": {world: world, x: 1, y: 2, z: 3, placed: " + now + "}",
+            "  " + old + ": {world: world, x: 1, y: 2, z: 3, placed: " + (now - 31L * 86_400_000L) + ", buried: true}",
+            "  " + unloaded + ": {world: gone, x: 1, y: 2, z: 3, placed: " + now + ", buried: true}",
+            "  " + kept + ": {world: world, x: 1, y: 2, z: 3, placed: " + now + ", buried: true}",
+            "  " + surface + ": {world: world, x: 1, y: 2, z: 3, placed: " + now + "}",
             ""));
     try (var b = mockStatic(Bukkit.class)) {
       b.when(() -> Bukkit.getWorld("world")).thenReturn(world);
@@ -304,6 +372,7 @@ class SourceHandlerTest {
     }
     assertEquals(new Location(world, 1, 2, 3), handler.getSource(old));
     assertNull(handler.getSource(unloaded));
+    assertNull(handler.getSource(surface));
     assertEquals(new Location(world, 1, 2, 3), handler.getSource(kept));
   }
 
@@ -321,18 +390,19 @@ class SourceHandlerTest {
     when(limits.canCollect(player)).thenReturn(false);
     when(config.getLimitDrops()).thenReturn(3);
     when(config.getLimitWindowMillis()).thenReturn(60000L);
-    handler.tryCollectSource(player, hunter, 10, EquipmentSlot.HAND);
-    handler.tryCollectSource(player, hunter, 10, EquipmentSlot.HAND);
+    handler.open(player, hunter, EquipmentSlot.HAND);
+    handler.open(player, hunter, EquipmentSlot.HAND);
     verify(player, times(1)).sendMessage("message");
     assertSame(old, handler.getSource(hunter));
     verify(limits, never()).recordCollection(any());
+    verifyNoInteractions(menu);
   }
 
   void collect(EquipmentSlot slot) {
     PluginManager plugins = mock(PluginManager.class);
     try (var b = mockStatic(Bukkit.class)) {
       b.when(Bukkit::getPluginManager).thenReturn(plugins);
-      handler.tryCollectSource(player, hunter, 1, slot);
+      handler.open(player, hunter, slot);
       verify(plugins).callEvent(any(GeigerSourceCollectEvent.class));
     }
   }
@@ -344,7 +414,7 @@ class SourceHandlerTest {
     PluginManager plugins = mock(PluginManager.class);
     try (var b = mockStatic(Bukkit.class)) {
       b.when(Bukkit::getPluginManager).thenReturn(plugins);
-      handler.tryCollectSource(player, hunter, 20, EquipmentSlot.HAND);
+      handler.open(player, hunter, EquipmentSlot.HAND);
       verify(plugins)
           .callEvent(
               argThat(
@@ -357,6 +427,9 @@ class SourceHandlerTest {
     verify(inventory).setItemInMainHand(null);
     verify(inventory).addItem(any(ItemStack.class));
     verify(player).playSound(any(Location.class), eq(Sound.ENTITY_ITEM_BREAK), eq(1f), eq(1f));
+    verify(player).playSound(old, Sound.BLOCK_CHEST_OPEN, 1f, 1f);
+    verify(player).spawnParticle(Particle.WITCH, old, 30, 0.4, 0.4, 0.4, 0.0);
+    verify(menu).open(player, null);
     assertNull(handler.getSource(hunter));
     assertFalse(handler.isPlacing(hunter));
   }
@@ -394,7 +467,7 @@ class SourceHandlerTest {
   }
 
   @Test
-  void offhandCollectionAlsoGrantsClonedRewardWithConfiguredAmount() {
+  void offhandCollectionPutsClonedRewardWithConfiguredAmountInTheCache() {
     TierReward tier = new TierReward("rare", 1);
     tier.addItem(new ItemReward("m.TEST", 4));
     when(config.getTierRewards()).thenReturn(List.of(tier));
@@ -405,7 +478,8 @@ class SourceHandlerTest {
     collect(EquipmentSlot.OFF_HAND);
     verify(inventory).setItemInOffHand(null);
     verify(copy).setAmount(4);
-    verify(inventory).addItem(copy);
+    verify(menu).open(player, copy);
+    verify(inventory, never()).addItem(copy);
     verify(original, never()).setAmount(anyInt());
   }
 
@@ -419,6 +493,7 @@ class SourceHandlerTest {
     collect(EquipmentSlot.HAND);
     verify(limits).recordCollection(player);
     verify(inventory, never()).addItem(any(ItemStack.class));
+    verify(menu).open(player, null);
   }
 
   @Test
@@ -427,6 +502,7 @@ class SourceHandlerTest {
     place();
     collect(EquipmentSlot.HAND);
     verify(inventory, times(1)).addItem(any(ItemStack.class));
+    verify(menu).open(player, null);
   }
 
   @Test
@@ -437,21 +513,21 @@ class SourceHandlerTest {
     handler.placeAt(hunter, 30, 40);
     newer.complete(mock(Chunk.class));
     older.complete(mock(Chunk.class));
-    assertEquals(30, handler.getSource(hunter).getX());
-    assertEquals(40, handler.getSource(hunter).getZ());
+    assertEquals(30.5, handler.getSource(hunter).getX());
+    assertEquals(40.5, handler.getSource(hunter).getZ());
   }
 
   @Test
   void limitWarningCanBeSentAgainAfterItsCooldown() throws Exception {
     place();
     when(limits.canCollect(player)).thenReturn(false);
-    handler.tryCollectSource(player, hunter, 0, EquipmentSlot.HAND);
+    handler.open(player, hunter, EquipmentSlot.HAND);
     var field = SourceHandler.class.getDeclaredField("lastLimitMessage");
     field.setAccessible(true);
     @SuppressWarnings("unchecked")
     Map<UUID, Long> sent = (Map<UUID, Long>) field.get(handler);
     sent.put(player.getUniqueId(), System.currentTimeMillis() - 16000);
-    handler.tryCollectSource(player, hunter, 0, EquipmentSlot.HAND);
+    handler.open(player, hunter, EquipmentSlot.HAND);
     verify(player, times(2)).sendMessage("message");
   }
 
@@ -512,7 +588,7 @@ class SourceHandlerTest {
   }
 
   @Test
-  void fullInventoryDropsDeadCounterAndCompleteRewardWithoutLosingAmounts() {
+  void fullInventoryDropsDeadCounterWhileTheRewardWaitsInTheCache() {
     ItemStack deadTemplate = mock(ItemStack.class), dead = mock(ItemStack.class);
     when(api.getCreator().getItemFromPath("m.TOOLS.DEAD_GEIGER_COUNTER")).thenReturn(deadTemplate);
     when(deadTemplate.clone()).thenReturn(dead);
@@ -523,31 +599,23 @@ class SourceHandlerTest {
     tier.addItem(new ItemReward("m.reward", 12));
     when(config.getTierRewards()).thenReturn(List.of(tier));
     when(inventory.addItem(dead)).thenReturn(new HashMap<>(Map.of(0, dead)));
-    when(inventory.addItem(reward)).thenReturn(new HashMap<>(Map.of(0, reward)));
     place();
     collect(EquipmentSlot.OFF_HAND);
     verify(dead).setAmount(1);
     verify(reward).setAmount(12);
     verify(inventory).setItemInOffHand(null);
     verify(world).dropItemNaturally(player.getLocation(), dead);
-    verify(world).dropItemNaturally(player.getLocation(), reward);
-    verify(world, times(2)).dropItemNaturally(any(Location.class), any(ItemStack.class));
+    verify(world, times(1)).dropItemNaturally(any(Location.class), any(ItemStack.class));
+    verify(menu).open(player, reward);
   }
 
   @Test
-  void partiallyFilledInventoryDropsOnlyTheReturnedRewardRemainder() {
-    ItemStack rewardTemplate = mock(ItemStack.class), reward = mock(ItemStack.class);
+  void partiallyFilledInventoryDropsOnlyTheReturnedRemainder() {
+    ItemStack reward = mock(ItemStack.class);
     ItemStack remainder = mock(ItemStack.class);
     when(remainder.getAmount()).thenReturn(3);
-    when(api.getCreator().getItemFromPath("m.reward")).thenReturn(rewardTemplate);
-    when(rewardTemplate.clone()).thenReturn(reward);
-    TierReward tier = new TierReward("rare", 1);
-    tier.addItem(new ItemReward("m.reward", 12));
-    when(config.getTierRewards()).thenReturn(List.of(tier));
     when(inventory.addItem(reward)).thenReturn(new HashMap<>(Map.of(0, remainder)));
-    place();
-    collect(EquipmentSlot.HAND);
-    verify(reward).setAmount(12);
+    SourceHandler.giveItemOrDropLeftovers(player, reward);
     verify(world).dropItemNaturally(player.getLocation(), remainder);
     verify(world, times(1)).dropItemNaturally(any(Location.class), any(ItemStack.class));
     verify(remainder, never()).setAmount(anyInt());

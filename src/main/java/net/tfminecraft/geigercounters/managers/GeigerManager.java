@@ -9,6 +9,8 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.plugin.java.JavaPlugin;
 import net.tfminecraft.geigercounters.config.GeigerConfiguration;
+import net.tfminecraft.geigercounters.handlers.BuriedChest;
+import net.tfminecraft.geigercounters.handlers.CacheMenu;
 import net.tfminecraft.geigercounters.handlers.GeigerClickPlayer;
 import net.tfminecraft.geigercounters.handlers.ParticleRenderer;
 import net.tfminecraft.geigercounters.handlers.SignalBar;
@@ -26,7 +28,7 @@ import java.util.UUID;
 // Main manager for the Geiger Counter system
 // Coordinates between configuration, validation, particles, and source handling
 // ====================================
-public class GeigerManager {
+public class GeigerManager implements BuriedChest.Actions {
     
     private static final long CHECK_INTERVAL_TICKS = 5L;
     
@@ -41,6 +43,8 @@ public class GeigerManager {
     private GeigerClickPlayer clickPlayer;
     private SignalBar signalBar;
     private SourceHandler sourceHandler;
+    private BuriedChest buriedChest;
+    private CacheMenu cacheMenu;
     private DropLimitManager dropLimitManager;
     private ItemAPI api;
     
@@ -83,8 +87,14 @@ public class GeigerManager {
         dropLimitManager = new DropLimitManager(plugin, configuration);
         dropLimitManager.load();
 
-        sourceHandler = new SourceHandler(plugin, configuration, api, spawnFilter, dropLimitManager);
+        cacheMenu = new CacheMenu(configuration);
+
+        sourceHandler = new SourceHandler(plugin, configuration, api, spawnFilter, dropLimitManager, cacheMenu);
         sourceHandler.load();
+
+        buriedChest = new BuriedChest(this);
+        Bukkit.getPluginManager().registerEvents(buriedChest, plugin);
+        Bukkit.getPluginManager().registerEvents(cacheMenu, plugin);
         
         // Start player checking task
         startPlayerCheckTask();
@@ -112,6 +122,12 @@ public class GeigerManager {
         }
         if (signalBar != null) {
             signalBar.clear();
+        }
+        if (buriedChest != null) {
+            buriedChest.clear();
+        }
+        if (cacheMenu != null) {
+            cacheMenu.closeAll();
         }
         if (dropLimitManager != null) {
             dropLimitManager.save();
@@ -158,6 +174,7 @@ public class GeigerManager {
     private void checkAllPlayers() {
         World world = configuration.getWorld();
         Set<UUID> hunting = new HashSet<>();
+        Set<UUID> revealed = new HashSet<>();
 
         for (Player player : Bukkit.getOnlinePlayers()) {
             if (world == null || !world.equals(player.getWorld())) {
@@ -168,12 +185,13 @@ public class GeigerManager {
                 continue;
             }
             Optional<UUID> hunter = Hunters.of(player);
-            if (hunter.isPresent() && handlePlayerWithGeiger(player, hunter.get(), geigerSlot)) {
+            if (hunter.isPresent() && handlePlayerWithGeiger(player, hunter.get(), revealed)) {
                 hunting.add(player.getUniqueId());
             }
         }
 
         signalBar.retain(hunting);
+        buriedChest.retain(revealed);
     }
 
     // Returns the hand holding a Geiger Counter, or null if neither
@@ -190,8 +208,9 @@ public class GeigerManager {
     // ====================================
     // Returns whether the player has a source to read. One is placed near
     // them when they have none, or have strayed beyond reroll-distance.
+    // Players near enough to see their cache are added to <revealed>.
     // ====================================
-    private boolean handlePlayerWithGeiger(Player player, UUID hunter, EquipmentSlot geigerSlot) {
+    private boolean handlePlayerWithGeiger(Player player, UUID hunter, Set<UUID> revealed) {
         Location source = sourceHandler.getSource(hunter);
         if (source == null) {
             if (!sourceHandler.isPlacing(hunter)) {
@@ -207,10 +226,48 @@ public class GeigerManager {
         }
 
         particleRenderer.showParticleEffect(player, distance);
-        clickPlayer.updateRate(player, distance);
-        signalBar.update(player, source, distance);
-        sourceHandler.tryCollectSource(player, hunter, distance, geigerSlot);
+
+        // Depth counts once the hunter is close enough to start digging
+        double reach = player.getLocation().distance(source);
+        if (reach <= configuration.getPinpointRange()) {
+            clickPlayer.updatePinpoint(player, reach);
+            signalBar.pinpoint(player, reach);
+        } else {
+            clickPlayer.updateRate(player, distance);
+            signalBar.update(player, source, distance);
+        }
+
+        if (reach <= BuriedChest.REVEAL_DISTANCE) {
+            buriedChest.show(player, source);
+            revealed.add(player.getUniqueId());
+        }
         return true;
+    }
+
+    // ====================================
+    // The hunter clicked their cache, which only shows while they hold a detector
+    // ====================================
+    @Override
+    public void open(Player player) {
+        Optional<UUID> hunter = Hunters.of(player);
+        EquipmentSlot geigerSlot = findGeigerSlot(player);
+        if (hunter.isEmpty() || geigerSlot == null) {
+            return;
+        }
+        sourceHandler.open(player, hunter.get(), geigerSlot);
+    }
+
+    // ====================================
+    // The ground over the cache cannot be dug, so bury it somewhere else
+    // ====================================
+    @Override
+    public void groundProtected(Player player) {
+        Optional<UUID> hunter = Hunters.of(player);
+        if (hunter.isEmpty()) {
+            return;
+        }
+        player.sendMessage(configuration.getMessages().get("player.cache-protected"));
+        sourceHandler.placeNear(hunter.get(), player.getLocation());
     }
     
     // ===== DISTANCE CALCULATION =====

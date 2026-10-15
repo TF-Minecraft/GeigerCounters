@@ -50,12 +50,16 @@ public class GeigerConfiguration {
     private double maxSourceDistance;
     private double rerollDistance;
 
+    // How many blocks of ground cover a cache
+    private int minBurialDepth;
+    private int maxBurialDepth;
+
     // Spawn location filters
     private SpawnFilterConfig spawnFilters = new SpawnFilterConfig();
 
     // Detection settings
-    private double collectionDistance;
     private double maxDetectionDistance;
+    private double pinpointRange;
     private double closeRangeThreshold;
     private double threeRingsDistance;
     private double twoRingsDistance;
@@ -143,8 +147,8 @@ public class GeigerConfiguration {
     // How far from the character a source is placed, and when it is placed again
     // ====================================
     private void loadSourceDistances() {
-        minSourceDistance = Math.max(0.0, plugin.getConfig().getDouble("source.min-distance", 150.0));
-        maxSourceDistance = plugin.getConfig().getDouble("source.max-distance", 500.0);
+        minSourceDistance = Math.max(0.0, plugin.getConfig().getDouble("source.min-distance", 300.0));
+        maxSourceDistance = plugin.getConfig().getDouble("source.max-distance", 600.0);
         rerollDistance = plugin.getConfig().getDouble("source.reroll-distance", 1000.0);
 
         if (maxSourceDistance < minSourceDistance) {
@@ -156,6 +160,13 @@ public class GeigerConfiguration {
         if (rerollDistance < maxSourceDistance) {
             plugin.getLogger().warning("source.reroll-distance is below source.max-distance - using max-distance.");
             rerollDistance = maxSourceDistance;
+        }
+
+        minBurialDepth = Math.max(1, plugin.getConfig().getInt("source.burial.min-depth", 3));
+        maxBurialDepth = plugin.getConfig().getInt("source.burial.max-depth", 6);
+        if (maxBurialDepth < minBurialDepth) {
+            plugin.getLogger().warning("source.burial.max-depth is below min-depth - using min-depth for both.");
+            maxBurialDepth = minBurialDepth;
         }
     }
 
@@ -189,11 +200,16 @@ public class GeigerConfiguration {
     }
 
     private void loadDetectionSettings() {
-        collectionDistance = plugin.getConfig().getDouble("detection.collection-distance", 20.0);
         maxDetectionDistance = plugin.getConfig().getDouble("detection.max-detection-distance", 1000.0);
+        pinpointRange = plugin.getConfig().getDouble("detection.pinpoint-range", 12.0);
         closeRangeThreshold = plugin.getConfig().getDouble("detection.close-range-threshold", 200.0);
         threeRingsDistance = plugin.getConfig().getDouble("detection.ring-thresholds.three-rings", 100.0);
         twoRingsDistance = plugin.getConfig().getDouble("detection.ring-thresholds.two-rings", 300.0);
+
+        if (pinpointRange <= 0.0) {
+            plugin.getLogger().warning("detection.pinpoint-range must be greater than 0 - falling back to 12.");
+            pinpointRange = 12.0;
+        }
     }
     
     // ====================================
@@ -420,8 +436,10 @@ public class GeigerConfiguration {
     public double getMinSourceDistance() { return minSourceDistance; }
     public double getMaxSourceDistance() { return maxSourceDistance; }
     public double getRerollDistance() { return rerollDistance; }
+    public int getMinBurialDepth() { return minBurialDepth; }
+    public int getMaxBurialDepth() { return maxBurialDepth; }
     public SpawnFilterConfig getSpawnFilters() { return spawnFilters; }
-    public double getCollectionDistance() { return collectionDistance; }
+    public double getPinpointRange() { return pinpointRange; }
     public double getMaxDetectionDistance() { return maxDetectionDistance; }
     public double getCloseRangeThreshold() { return closeRangeThreshold; }
     public double getThreeRingsDistance() { return threeRingsDistance; }

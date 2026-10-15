@@ -1,6 +1,7 @@
 package net.tfminecraft.geigercounters.handlers;
 
 import net.kyori.adventure.bossbar.BossBar;
+import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -17,10 +18,14 @@ import java.util.UUID;
 // Boss bar shown while a player holds a detector.
 //
 // It fills as the player closes in and peaks when they face their source, so
-// sweeping round on the spot shows which way to walk. MMOCore owns the action
-// bar, which is why this sits at the top of the screen.
+// sweeping round on the spot shows which way to walk. Within pinpoint range
+// it retitles and shows closeness to the cache alone, to find where to dig.
+// MMOCore owns the action bar, which is why this sits at the top of the screen.
 // ====================================
 public class SignalBar {
+
+    static final String TITLE = "player.signal-bar";
+    static final String PINPOINT_TITLE = "player.signal-bar-close";
 
     private static final LegacyComponentSerializer LEGACY = LegacyComponentSerializer.builder()
         .character(LegacyComponentSerializer.SECTION_CHAR)
@@ -30,8 +35,8 @@ public class SignalBar {
 
     private final GeigerConfiguration config;
 
-    // Players currently shown a bar
-    private final Map<UUID, BossBar> bars = new HashMap<>();
+    // Players currently shown a bar, and which title it carries
+    private final Map<UUID, Shown> bars = new HashMap<>();
 
     public SignalBar(GeigerConfiguration config) {
         this.config = config;
@@ -41,36 +46,55 @@ public class SignalBar {
     // Show or refresh the player's bar for a source <distance> blocks away
     // ====================================
     public void update(Player player, Location source, double distance) {
+        show(player, signal(player.getLocation(), source, distance), TITLE);
+    }
+
+    // ====================================
+    // Show or refresh the close reading for a cache <distance> blocks away in 3D
+    // ====================================
+    public void pinpoint(Player player, double distance) {
+        double range = config.getPinpointRange();
+        show(player, 1.0 - Math.min(distance, range) / range, PINPOINT_TITLE);
+    }
+
+    private void show(Player player, double signal, String title) {
         if (!config.isBarEnabled()) {
             hide(player.getUniqueId());
             return;
         }
 
-        float progress = (float) signal(player.getLocation(), source, distance);
-        BossBar bar = bars.get(player.getUniqueId());
-        if (bar != null) {
-            bar.progress(progress);
+        float progress = (float) signal;
+        Shown shown = bars.get(player.getUniqueId());
+        if (shown != null) {
+            shown.bar.progress(progress);
+            if (!shown.title.equals(title)) {
+                shown.bar.name(title(title));
+                shown.title = title;
+            }
             return;
         }
 
-        bar = BossBar.bossBar(LEGACY.deserialize(config.getMessages().get("player.signal-bar")), progress,
-            BossBar.Color.PURPLE, BossBar.Overlay.NOTCHED_10);
-        bars.put(player.getUniqueId(), bar);
+        BossBar bar = BossBar.bossBar(title(title), progress, BossBar.Color.PURPLE, BossBar.Overlay.NOTCHED_10);
+        bars.put(player.getUniqueId(), new Shown(bar, title));
         player.showBossBar(bar);
+    }
+
+    private Component title(String key) {
+        return LEGACY.deserialize(config.getMessages().get(key));
     }
 
     // ====================================
     // Hide every bar except those of the given players, who are still hunting
     // ====================================
     public void retain(Set<UUID> hunting) {
-        Iterator<Map.Entry<UUID, BossBar>> iterator = bars.entrySet().iterator();
+        Iterator<Map.Entry<UUID, Shown>> iterator = bars.entrySet().iterator();
         while (iterator.hasNext()) {
-            Map.Entry<UUID, BossBar> entry = iterator.next();
+            Map.Entry<UUID, Shown> entry = iterator.next();
             if (hunting.contains(entry.getKey())) {
                 continue;
             }
             iterator.remove();
-            hideFrom(entry.getKey(), entry.getValue());
+            hideFrom(entry.getKey(), entry.getValue().bar);
         }
     }
 
@@ -79,9 +103,9 @@ public class SignalBar {
     }
 
     private void hide(UUID playerId) {
-        BossBar bar = bars.remove(playerId);
-        if (bar != null) {
-            hideFrom(playerId, bar);
+        Shown shown = bars.remove(playerId);
+        if (shown != null) {
+            hideFrom(playerId, shown.bar);
         }
     }
 
@@ -120,5 +144,15 @@ public class SignalBar {
         double cosine = (-Math.sin(yaw) * deltaX + Math.cos(yaw) * deltaZ) / length;
         double half = (cosine + 1.0) / 2.0;
         return half * half;
+    }
+
+    private static final class Shown {
+        final BossBar bar;
+        String title;
+
+        Shown(BossBar bar, String title) {
+            this.bar = bar;
+            this.title = title;
+        }
     }
 }

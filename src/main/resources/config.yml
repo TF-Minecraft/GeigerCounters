@@ -1,12 +1,14 @@
 # Config version - do not edit.
 # The plugin uses it to add newly introduced keys on upgrade; your own values
 # are kept, and the previous file is backed up as config-v<n>.yml.bak first.
-config-version: 6
+config-version: 7
 
 # ====================================
 # Source location settings
-# Each character hunts their own source. It is placed near the character
-# when they first hold a live detector, and stays put until they find it.
+# Each character hunts their own source: a cache buried in natural ground
+# that only they can see, and only while holding a live detector. It is
+# placed near the character when they first hold one, and stays put until
+# they dig it up and open it.
 # ====================================
 source:
   # World name where sources spawn. Detectors only read in this world.
@@ -24,12 +26,19 @@ source:
     z: 1000.0
 
   # How far (blocks) from the character a new source is placed
-  min-distance: 150.0
-  max-distance: 500.0
+  min-distance: 300.0
+  max-distance: 600.0
 
   # A source further than this from its character is placed again near
   # them, e.g. after they travel or teleport away
   reroll-distance: 1000.0
+
+  # How many blocks of ground lie over the cache. It is always sealed in
+  # natural ground (stone, dirt, sand, ores...) on all six sides, so it
+  # never shows in caves or lands under someone's build.
+  burial:
+    min-depth: 3
+    max-depth: 6
 
   # ====================================
   # Rules deciding where the source is allowed to spawn
@@ -66,12 +75,14 @@ source:
 # Detection settings
 # ====================================
 detection:
-  # Maximum distance to collect the radioactive source (blocks)
-  collection-distance: 20.0
-  
   # Maximum distance for Geiger Counter detection (blocks)
   max-detection-distance: 1000.0
   
+  # Within this many blocks of the cache (measured in 3D, depth included)
+  # the detector switches to a close reading: the bar and clicks start over
+  # from low and peak on the cache itself, to show where to dig
+  pinpoint-range: 12.0
+
   # Distance threshold for close/far range colors (blocks)
   close-range-threshold: 200.0
   
@@ -84,7 +95,8 @@ detection:
 # ====================================
 # Signal bar
 # A boss bar shown while holding a detector. It fills as the player gets
-# closer and peaks when they face their source.
+# closer and peaks when they face their source. Within pinpoint-range it
+# shows closeness to the cache alone.
 # ====================================
 bar:
   enabled: true

@@ -12,12 +12,21 @@
 # PLAYER - seen by anyone hunting a source
 # ====================================
 player:
-  # Shown when a player finds their radioactive source, followed on the same
+  # Shown when a player opens their buried cache, followed on the same
   # line by dead-geiger. Leave either blank to drop that half.
   found-source: "&#AA00FFYou found the arcane source!"
 
   # Title of the signal bar shown while holding a detector
   signal-bar: "&#AA00FFArcane Signal"
+
+  # Title of the signal bar within pinpoint range of the cache
+  signal-bar-close: "&#AA00FFArcane Signal &7- dig close by"
+
+  # Title of the chest window that opens on the cache
+  cache-title: "&#AA00FFArcane Cache"
+
+  # Shown when the ground beside the cache cannot be dug, and it moves elsewhere
+  cache-protected: "&7This ground is warded. The signal fades and settles somewhere else."
 
   # Second half of the found-source line: the counter burns out
   dead-geiger: "&7Your detector is spent."
@@ -40,8 +49,8 @@ admin:
   locate-usage: "&cUsage: /geiger locate <player>"
 
   # /geiger locate [player]
-  # %player% = whose source, %x% %z% = source coordinates, %world% = world name
-  source-located: "&a%player%'s source is at X = %x% Z = %z% (world: %world%)"
+  # %player% = whose source, %x% %y% %z% = cache block, %world% = world name
+  source-located: "&a%player%'s cache is buried at X = %x% Y = %y% Z = %z% (world: %world%)"
 
   # /geiger locate while that source is still being placed
   source-relocating: "&c%player%'s source is being placed right now."
@@ -59,8 +68,8 @@ admin:
   move-failed: "&cThe source could not be moved."
   # %player% = whose source was cleared
   move-cleared: "&a%player%'s source cleared. A new one is placed near them when they next hold a detector."
-  # %player% = whose source, %x% %z% = where it ended up
-  move-success: "&a%player%'s source moved to X = %x% Z = %z%"
+  # %player% = whose source, %x% %y% %z% = the cache block it was buried at
+  move-success: "&a%player%'s cache buried at X = %x% Y = %y% Z = %z%"
 
   # /geiger limits <player>
   limits-usage: "&cUsage: /geiger limits <player>"

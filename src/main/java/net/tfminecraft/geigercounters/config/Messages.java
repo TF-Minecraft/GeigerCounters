@@ -69,10 +69,6 @@ public class Messages {
         return Utils.colorize(raw);
     }
 
-    // Coordinates read better as whole-ish numbers than raw doubles
-    public static String coordinate(double value) {
-        return String.format("%.1f", value);
-    }
 
     private YamlConfiguration loadPackaged() {
         InputStream stream = plugin.getResource(ConfigMigrator.MESSAGES_FILE);

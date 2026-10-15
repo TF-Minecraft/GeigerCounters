@@ -4,7 +4,10 @@ import net.tfminecraft.tlibs.objects.api.ItemAPI;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Chunk;
+import org.bukkit.HeightMap;
 import org.bukkit.Location;
+import org.bukkit.Material;
+import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.World;
 import org.bukkit.configuration.ConfigurationSection;
@@ -24,27 +27,45 @@ import net.tfminecraft.geigercounters.validators.SpawnLocationFilter;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 // ====================================
-// Each hunter's radioactive source: placement, persistence and collection.
+// Each hunter's radioactive source: placement, persistence and opening.
 // A hunter is the character being played (the account without RPCharacters).
+//
+// A source is a cache buried in natural ground. Its location is the centre
+// of the cache block, which the hunter digs down to and opens by hand.
 // ====================================
 public class SourceHandler {
     
     private static final String DEAD_GEIGER_PATH = "m.TOOLS.DEAD_GEIGER_COUNTER";
 
-    // Collection is checked every few ticks, so the limit message needs its own
-    // cooldown or a player standing on the source would be spammed
+    // A player clicking at a cache they may not open yet would otherwise get
+    // the limit message on every click
     private static final long LIMIT_MESSAGE_COOLDOWN_MILLIS = 15_000L;
 
     private static final String DATA_FILE_NAME = "sources.yml";
     private static final String SOURCES_PATH = "sources";
+
+    // Sources saved before caches were buried sit on the surface; they lack
+    // this flag and are dropped on load so a buried one replaces them
+    private static final String BURIED_KEY = "buried";
+
+    // Highest a tree trunk is followed down to the ground beneath it
+    private static final int MAX_TRUNK_HEIGHT = 32;
+
+    // Overworld trunks stand on the ground a cache is buried in
+    private static final Set<Material> TRUNKS = EnumSet.of(
+        Material.OAK_LOG, Material.SPRUCE_LOG, Material.BIRCH_LOG, Material.JUNGLE_LOG, Material.ACACIA_LOG,
+        Material.DARK_OAK_LOG, Material.MANGROVE_LOG, Material.MANGROVE_ROOTS, Material.CHERRY_LOG,
+        Material.PALE_OAK_LOG, Material.MUSHROOM_STEM);
 
     // Random spots tried for one that is both in the ring and inside the area
     private static final int SPOT_TRIES = 100;
@@ -54,6 +75,7 @@ public class SourceHandler {
     private final ItemAPI api;
     private final SpawnLocationFilter spawnFilter;
     private final DropLimitManager dropLimits;
+    private final CacheMenu cacheMenu;
     private final File dataFile;
     private final Random random = new Random();
 
@@ -67,12 +89,13 @@ public class SourceHandler {
     private final Map<UUID, CompletableFuture<Location>> pending = new HashMap<>();
 
     public SourceHandler(JavaPlugin plugin, GeigerConfiguration config, ItemAPI api,
-                         SpawnLocationFilter spawnFilter, DropLimitManager dropLimits) {
+                         SpawnLocationFilter spawnFilter, DropLimitManager dropLimits, CacheMenu cacheMenu) {
         this.plugin = plugin;
         this.config = config;
         this.api = api;
         this.spawnFilter = spawnFilter;
         this.dropLimits = dropLimits;
+        this.cacheMenu = cacheMenu;
         this.dataFile = new File(plugin.getDataFolder(), DATA_FILE_NAME);
     }
     
@@ -95,7 +118,8 @@ public class SourceHandler {
     // Candidates sit between source.min-distance and source.max-distance from
     // the origin, inside the configured area, and are rolled until one passes
     // the spawn filters (liquid, void, blocked blocks, distance from spawn,
-    // WorldGuard regions). Every candidate needs its chunk loaded to read the
+    // WorldGuard regions) and can be buried in natural ground. Every
+    // candidate needs its chunk loaded to read the
     // terrain, so attempts run one at a time through getChunkAtAsync instead
     // of stalling the main thread.
     //
@@ -165,11 +189,11 @@ public class SourceHandler {
                 plugin.getLogger().warning("Failed to load chunk for candidate source location: " + error.getMessage());
             }
 
-            Location candidate = toSurfaceLocation(x, z);
-            SpawnLocationFilter.Rejection rejection = spawnFilter.check(candidate);
+            Candidate candidate = candidateAt(x, z);
+            SpawnLocationFilter.Rejection rejection = candidate.check(spawnFilter);
 
             if (rejection == null) {
-                applySource(hunter, candidate, attempt, result);
+                applySource(hunter, candidate.cache(), attempt, result);
                 return;
             }
 
@@ -179,7 +203,7 @@ public class SourceHandler {
                     "No valid source location found after %d attempts (last rejection: %s). "
                         + "Using the last candidate - check your source.spawn-filters settings.",
                     attempt, rejection.getDescription()));
-                applySource(hunter, candidate, attempt, result);
+                applySource(hunter, candidate.cache(), attempt, result);
                 return;
             }
 
@@ -188,7 +212,7 @@ public class SourceHandler {
     }
 
     // ====================================
-    // Move the hunter's source to specific X/Z coordinates (Y snaps to surface)
+    // Move the hunter's source to specific X/Z coordinates, buried beneath the ground there
     // Admin-driven moves bypass the spawn filters on purpose, but a failed
     // filter check is logged so the admin knows the spot is normally excluded
     // ====================================
@@ -206,16 +230,16 @@ public class SourceHandler {
                 plugin.getLogger().warning("Failed to load chunk for the requested source location: " + error.getMessage());
             }
 
-            Location location = toSurfaceLocation(x, z);
+            Candidate candidate = candidateAt(x, z);
 
-            SpawnLocationFilter.Rejection rejection = spawnFilter.check(location);
+            SpawnLocationFilter.Rejection rejection = candidate.check(spawnFilter);
             if (rejection != null) {
                 plugin.getLogger().warning(String.format(
                     "Source manually moved to a location that fails the spawn filters (%s).",
                     rejection.getDescription()));
             }
 
-            applySource(hunter, location, 1, result);
+            applySource(hunter, candidate.cache(), 1, result);
         });
 
         return result;
@@ -236,10 +260,39 @@ public class SourceHandler {
         return config.getWorld().getChunkAtAsync(blockCoord(x) >> 4, blockCoord(z) >> 4, true);
     }
 
-    // Y snaps to one block above the highest block in the column
-    private Location toSurfaceLocation(double x, double z) {
-        double surfaceY = config.getWorld().getHighestBlockYAt(blockCoord(x), blockCoord(z)) + 1.0;
-        return new Location(config.getWorld(), x, surfaceY, z);
+    // ====================================
+    // A cache buried burial-depth blocks under the ground at x/z.
+    //
+    // The column is kept one block inside its chunk, so the cache's neighbours
+    // are in the chunk already loaded. Leaves are skipped by the height map and
+    // tree trunks are followed down, so the ground is the soil the tree grows in.
+    // ====================================
+    private Candidate candidateAt(double x, double z) {
+        World world = config.getWorld();
+        int blockX = insideChunk(blockCoord(x));
+        int blockZ = insideChunk(blockCoord(z));
+
+        int groundY = world.getHighestBlockYAt(blockX, blockZ, HeightMap.MOTION_BLOCKING_NO_LEAVES);
+        int trunkBottom = groundY - MAX_TRUNK_HEIGHT;
+        while (groundY > trunkBottom && TRUNKS.contains(world.getBlockAt(blockX, groundY, blockZ).getType())) {
+            groundY--;
+        }
+
+        int min = config.getMinBurialDepth();
+        int depth = min + random.nextInt(config.getMaxBurialDepth() - min + 1);
+        int cacheY = Math.max(world.getMinHeight(), groundY - depth);
+        return new Candidate(
+            new Location(world, blockX + 0.5, groundY + 1.0, blockZ + 0.5),
+            new Location(world, blockX + 0.5, cacheY + 0.5, blockZ + 0.5));
+    }
+
+    // Local block coordinates 0 and 15 are moved one block inwards
+    static int insideChunk(int blockCoord) {
+        int local = blockCoord & 15;
+        if (local == 0) {
+            return blockCoord + 1;
+        }
+        return local == 15 ? blockCoord - 1 : blockCoord;
     }
 
     // floor, not truncation - casting rounds toward zero and lands one block
@@ -253,25 +306,21 @@ public class SourceHandler {
         sources.put(hunter, new Source(location, System.currentTimeMillis()));
         save();
 
-        plugin.getLogger().info(String.format("Source for %s placed at X = %.1f Z = %.1f (%d attempt%s)",
-            hunter, location.getX(), location.getZ(), attempts, attempts == 1 ? "" : "s"));
+        plugin.getLogger().info(String.format("Source for %s buried at X = %d Y = %d Z = %d (%d attempt%s)",
+            hunter, location.getBlockX(), location.getBlockY(), location.getBlockZ(), attempts, attempts == 1 ? "" : "s"));
         result.complete(location);
     }
 
     // ====================================
-    // Check if the player is close enough to collect their source
+    // The hunter opened their cache: spend the detector and show the loot
     // ====================================
-    public void tryCollectSource(Player player, UUID hunter, double distance, EquipmentSlot geigerSlot) {
-        if (distance > config.getCollectionDistance()) {
-            return;
-        }
-
+    public void open(Player player, UUID hunter, EquipmentSlot geigerSlot) {
         Source source = sources.get(hunter);
         if (source == null) {
             return;
         }
 
-        // Out of collections for this window - the source stays put for later
+        // Out of finds for this window - the cache stays put for later
         if (!dropLimits.canCollect(player)) {
             notifyLimitReached(player);
             return;
@@ -308,7 +357,10 @@ public class SourceHandler {
         Bukkit.getPluginManager().callEvent(new GeigerSourceCollectEvent(player, collected));
         replaceGeigerWithDeadVersion(player, geigerSlot);
         notifyPlayerOfCollection(player);
-        giveReward(player);
+
+        player.playSound(collected, Sound.BLOCK_CHEST_OPEN, 1f, 1f);
+        player.spawnParticle(Particle.WITCH, collected, 30, 0.4, 0.4, 0.4, 0.0);
+        cacheMenu.open(player, rollReward(player));
     }
 
     // One line: the find, then the spent counter. A blank half is left out.
@@ -354,26 +406,24 @@ public class SourceHandler {
     }
     
     // ====================================
-    // Give a random reward to the player based on tier weights
+    // A random reward based on tier weights, or null when there is none
     // ====================================
-    private void giveReward(Player player) {
+    private ItemStack rollReward(Player player) {
         List<TierReward> tiers = config.getTierRewards();
         if (tiers.isEmpty()) {
-            return;
+            return null;
         }
         
         // Select a tier based on weights
         TierReward selectedTier = selectRandomTier(tiers);
         if (selectedTier.isEmpty()) {
-            return;
+            return null;
         }
         
         // Select a random item from the tier
         List<ItemReward> tierItems = selectedTier.getItems();
         ItemReward randomItem = tierItems.get(random.nextInt(tierItems.size()));
-        
-        // Give the item to the player
-        giveRewardItem(player, randomItem, selectedTier.getTierName());
+        return rewardItem(player, randomItem, selectedTier.getTierName());
     }
     
     // ====================================
@@ -405,19 +455,20 @@ public class SourceHandler {
     }
     
     // ====================================
-    // Give a specific reward item to the player
+    // Build a specific reward item, or null if its path does not resolve
     // ====================================
-    private void giveRewardItem(Player player, ItemReward reward, String tierName) {
+    private ItemStack rewardItem(Player player, ItemReward reward, String tierName) {
         try {
             ItemStack rewardItem = createRewardItem(reward);
-            giveItemOrDropLeftovers(player, rewardItem);
             plugin.getLogger().info(player.getName() + " received " + tierName + " reward: " + reward.getOutputItem());
+            return rewardItem;
         } catch (Exception e) {
             plugin.getLogger().warning("Failed to give reward to " + player.getName() + ": " + e.getMessage());
+            return null;
         }
     }
     
-    private void giveItemOrDropLeftovers(Player player, ItemStack item) {
+    static void giveItemOrDropLeftovers(Player player, ItemStack item) {
         for (ItemStack leftover : player.getInventory().addItem(item).values()) {
             player.getWorld().dropItemNaturally(player.getLocation(), leftover);
         }
@@ -450,10 +501,12 @@ public class SourceHandler {
     // ===== PERSISTENCE =====
 
     // ====================================
-    // Read sources.yml. Sources in worlds that are not loaded are dropped.
+    // Read sources.yml. Sources in worlds that are not loaded, and surface
+    // sources from before caches were buried, are dropped.
     // ====================================
     public void load() {
         sources.clear();
+        int surfaceSources = 0;
         if (!dataFile.exists()) {
             return;
         }
@@ -477,6 +530,10 @@ public class SourceHandler {
             if (entry == null) {
                 continue;
             }
+            if (!entry.getBoolean(BURIED_KEY)) {
+                surfaceSources++;
+                continue;
+            }
             long placedAt = entry.getLong("placed");
             World world = Bukkit.getWorld(entry.getString("world", ""));
             if (world == null) {
@@ -485,6 +542,11 @@ public class SourceHandler {
 
             Location location = new Location(world, entry.getDouble("x"), entry.getDouble("y"), entry.getDouble("z"));
             sources.put(hunter, new Source(location, placedAt));
+        }
+
+        if (surfaceSources > 0) {
+            plugin.getLogger().info("Dropped " + surfaceSources + " surface source(s) from before caches were buried;"
+                + " their hunters get a buried cache on their next hold.");
         }
     }
 
@@ -502,6 +564,7 @@ public class SourceHandler {
             data.set(base + "y", location.getY());
             data.set(base + "z", location.getZ());
             data.set(base + "placed", entry.getValue().placedAt());
+            data.set(base + BURIED_KEY, true);
         }
 
         try {
@@ -512,5 +575,15 @@ public class SourceHandler {
     }
 
     private record Source(Location location, long placedAt) {
+    }
+
+    // Where the hunter stands over the cache, and the cache itself
+    private record Candidate(Location surface, Location cache) {
+
+        // The surface rules look at the ground; the burial rule at the cache
+        SpawnLocationFilter.Rejection check(SpawnLocationFilter filter) {
+            SpawnLocationFilter.Rejection rejection = filter.check(surface);
+            return rejection != null ? rejection : filter.checkBuried(cache.getBlock());
+        }
     }
 }

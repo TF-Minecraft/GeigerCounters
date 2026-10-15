@@ -117,7 +117,6 @@ public class LifecycleUtilitiesTest {
     assertEquals("shipped", messages.get("default"));
     assertEquals("§aFound %item% x%amount%", messages.get("custom", "unpaired"));
     assertEquals("absent", messages.get("absent"));
-    assertEquals("-0.5", Messages.coordinate(-0.5));
     Files.writeString(directory.resolve("messages.yml"), "custom: changed\n");
     messages.reload();
     assertEquals("changed", messages.get("custom"));

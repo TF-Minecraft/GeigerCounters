@@ -6,6 +6,7 @@ import static org.mockito.Mockito.*;
 import java.util.Set;
 import java.util.UUID;
 import net.kyori.adventure.bossbar.BossBar;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import net.tfminecraft.geigercounters.config.GeigerConfiguration;
 import net.tfminecraft.geigercounters.config.Messages;
 import org.bukkit.Bukkit;
@@ -29,6 +30,8 @@ class SignalBarTest {
     Messages messages = mock(Messages.class);
     when(config.getMessages()).thenReturn(messages);
     when(messages.get("player.signal-bar")).thenReturn("§x§a§a§0§0§f§fArcane signal");
+    when(messages.get("player.signal-bar-close")).thenReturn("Dig close by");
+    when(config.getPinpointRange()).thenReturn(10.0);
     when(config.isBarEnabled()).thenReturn(true);
     when(config.getBarRange()).thenReturn(100.0);
     when(config.getBarFacingWeight()).thenReturn(0.5);
@@ -56,6 +59,28 @@ class SignalBarTest {
     bar.update(player, new Location(world, 0, 64, -50), 50);
     assertEquals(0.25f, shown.progress(), 1e-6);
     verify(player, times(1)).showBossBar(any(BossBar.class));
+  }
+
+  @Test
+  void pinpointRetitlesTheBarAndShowsClosenessAlone() {
+    bar.update(player, new Location(world, 0, 64, 50), 50);
+    BossBar shown = shown();
+    bar.pinpoint(player, 4);
+    assertEquals(0.6f, shown.progress(), 1e-6);
+    assertEquals("Dig close by", PlainTextComponentSerializer.plainText().serialize(shown.name()));
+    bar.pinpoint(player, 30);
+    assertEquals(0f, shown.progress(), 1e-6);
+    bar.update(player, new Location(world, 0, 64, 50), 50);
+    assertEquals(0.5f, shown.progress(), 1e-6);
+    assertEquals("Arcane signal", PlainTextComponentSerializer.plainText().serialize(shown.name()));
+    verify(player, times(1)).showBossBar(any(BossBar.class));
+  }
+
+  @Test
+  void aPinpointReadingCanOpenTheBar() {
+    bar.pinpoint(player, 0);
+    assertEquals(1f, shown().progress(), 1e-6);
+    assertEquals("Dig close by", PlainTextComponentSerializer.plainText().serialize(shown().name()));
   }
 
   @Test

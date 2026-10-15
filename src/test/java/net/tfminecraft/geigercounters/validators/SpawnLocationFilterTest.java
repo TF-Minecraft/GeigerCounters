@@ -19,6 +19,7 @@ import net.tfminecraft.geigercounters.models.*;
 import net.tfminecraft.tlibs.objects.api.ItemAPI;
 import org.bukkit.*;
 import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.block.data.Waterlogged;
 import org.bukkit.inventory.ItemStack;
@@ -240,5 +241,35 @@ class SpawnLocationFilterTest {
     for (var rejection : SpawnLocationFilter.Rejection.values()) {
       assertFalse(rejection.getDescription().isBlank());
     }
+  }
+
+  @Test
+  void aCacheMustBeSealedInNaturalGroundOnEverySide() {
+    Block cache = mock(Block.class), side = mock(Block.class);
+    when(cache.getType()).thenReturn(Material.DEEPSLATE_IRON_ORE);
+    when(cache.getRelative(any(BlockFace.class))).thenReturn(side);
+    when(side.getType()).thenReturn(Material.DIRT);
+    assertNull(filter.checkBuried(cache));
+    verify(cache, times(6)).getRelative(any(BlockFace.class));
+    when(side.getType()).thenReturn(Material.AIR);
+    assertEquals(SpawnLocationFilter.Rejection.NOT_BURIED, filter.checkBuried(cache));
+    when(side.getType()).thenReturn(Material.COBBLESTONE);
+    assertEquals(SpawnLocationFilter.Rejection.NOT_BURIED, filter.checkBuried(cache));
+    when(cache.getType()).thenReturn(Material.OAK_PLANKS);
+    assertEquals(SpawnLocationFilter.Rejection.NOT_BURIED, filter.checkBuried(cache));
+    assertEquals("cache not sealed in natural ground", SpawnLocationFilter.Rejection.NOT_BURIED.getDescription());
+  }
+
+  @Test
+  void onlyTheLastOpenSideIsEnoughToRejectACache() {
+    Block cache = mock(Block.class), ground = mock(Block.class), cave = mock(Block.class);
+    when(cache.getType()).thenReturn(Material.STONE);
+    when(ground.getType()).thenReturn(Material.STONE);
+    when(cave.getType()).thenReturn(Material.CAVE_AIR);
+    when(cache.getRelative(any(BlockFace.class))).thenReturn(ground);
+    when(cache.getRelative(BlockFace.WEST)).thenReturn(cave);
+    assertEquals(SpawnLocationFilter.Rejection.NOT_BURIED, filter.checkBuried(cache));
+    assertTrue(SpawnLocationFilter.isNaturalGround(ground));
+    assertFalse(SpawnLocationFilter.isNaturalGround(cave));
   }
 }

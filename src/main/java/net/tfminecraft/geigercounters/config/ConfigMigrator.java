@@ -37,7 +37,8 @@ public class ConfigMigrator {
     // v4: messages.yml split into player/admin sections
     // v5: drops.tiers -> drops.lists.<name>.tiers, selected by drops.active-list
     // v6: a source per character - source distances, bar section, detection range capped
-    public static final int CURRENT_VERSION = 6;
+    // v7: buried caches - burial depths, pinpoint range, ring moved out, collection-distance gone
+    public static final int CURRENT_VERSION = 7;
 
     public static final String MESSAGES_FILE = "messages.yml";
 
@@ -86,6 +87,9 @@ public class ConfigMigrator {
         List<String> addedKeys = copyMissingKeys(packaged, live);
         if (liveVersion < 6) {
             capDetectionRange(live);
+        }
+        if (liveVersion < 7) {
+            moveRingOut(live);
         }
         boolean versionChanged = liveVersion != CURRENT_VERSION;
 
@@ -236,6 +240,28 @@ public class ConfigMigrator {
         live.set("detection.max-detection-distance", reroll);
         plugin.getLogger().info("Lowered detection.max-detection-distance from " + detection + " to " + reroll
             + " to match source.reroll-distance.");
+    }
+
+    // ====================================
+    // v6 shipped a 150-500 block ring, which proved too close. Only values
+    // still at those defaults move; a ring the admin chose is kept. Caches are
+    // opened by hand now, so collection-distance no longer means anything.
+    // ====================================
+    private void moveRingOut(FileConfiguration live) {
+        raiseDefault(live, "source.min-distance", 150.0, 300.0);
+        raiseDefault(live, "source.max-distance", 500.0, 600.0);
+        if (live.contains("detection.collection-distance", true)) {
+            live.set("detection.collection-distance", null);
+            plugin.getLogger().info("Removed detection.collection-distance - caches are dug up and opened now.");
+        }
+    }
+
+    private void raiseDefault(FileConfiguration live, String path, double oldDefault, double newDefault) {
+        if (live.getDouble(path) != oldDefault) {
+            return;
+        }
+        live.set(path, newDefault);
+        plugin.getLogger().info("Raised " + path + " from " + oldDefault + " to " + newDefault + ".");
     }
 
     // ====================================

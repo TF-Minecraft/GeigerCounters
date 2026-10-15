@@ -128,6 +128,35 @@ class GeigerEffectsTest {
   }
 
   @Test
+  void pinpointRateRestartsAtMinRateOnTheEdgeAndPeaksOnTheCache() throws Exception {
+    when(config.getPinpointRange()).thenReturn(10.0);
+    // Clicks per tick: 0.05 at or beyond the edge, 0.525 half way, 1 on the cache
+    double[][] cases = {{10, 0.049, 1}, {10, 0.051, 0}, {25, 0.051, 0}, {5, 0.52, 1}, {5, 0.53, 0}, {0, 0.999, 1}};
+    for (double[] reading : cases) {
+      GeigerClickPlayer clicker = clicker(reading[1]);
+      clearInvocations(player);
+      try (var bukkit = mockStatic(Bukkit.class)) {
+        bukkit.when(() -> Bukkit.getPlayer(id)).thenReturn(player);
+        clicker.updatePinpoint(player, reading[0]);
+        clicker.tick();
+      }
+      verify(player, times((int) reading[2]))
+          .playSound(
+              any(Location.class), anyString(), any(SoundCategory.class), anyFloat(), anyFloat());
+    }
+    when(config.getSoundMaxRate()).thenReturn(100.0);
+    GeigerClickPlayer clicker = clicker(0.999);
+    clearInvocations(player);
+    try (var bukkit = mockStatic(Bukkit.class)) {
+      bukkit.when(() -> Bukkit.getPlayer(id)).thenReturn(player);
+      clicker.updatePinpoint(player, 0);
+      clicker.tick();
+    }
+    verify(player)
+        .playSound(any(Location.class), anyString(), any(SoundCategory.class), anyFloat(), anyFloat());
+  }
+
+  @Test
   void ratesExpireAfterFifteenTicksAndForgetAndClearRemoveThemImmediately() throws Exception {
     GeigerClickPlayer clicker = clicker(0.0);
     try (var bukkit = mockStatic(Bukkit.class)) {

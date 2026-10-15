@@ -49,11 +49,27 @@ public class GeigerClickPlayer {
     // Called by the periodic player check, not every tick
     // ====================================
     public void updateRate(Player player, double distance) {
+        setRate(player, calculateClicksPerTick(distance));
+    }
+
+    // ====================================
+    // Close reading for a cache <distance> blocks away in 3D: the clicks drop
+    // back to min-rate at pinpoint-range and climb straight to max-rate on
+    // the cache, so the slowdown on arrival tells the player they are close
+    // ====================================
+    public void updatePinpoint(Player player, double distance) {
+        double range = config.getPinpointRange();
+        double closeness = 1.0 - Math.min(distance, range) / range;
+        double minRate = config.getSoundMinRate();
+        double clicksPerSecond = minRate + (config.getSoundMaxRate() - minRate) * closeness;
+        setRate(player, Math.min(1.0, clicksPerSecond / TICKS_PER_SECOND));
+    }
+
+    private void setRate(Player player, double clicksPerTick) {
         if (!config.isSoundEnabled()) {
             return;
         }
 
-        double clicksPerTick = calculateClicksPerTick(distance);
         if (clicksPerTick <= 0.0) {
             states.remove(player.getUniqueId());
             return;

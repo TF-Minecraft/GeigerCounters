@@ -101,13 +101,14 @@ public class GeigerCommand implements CommandExecutor, TabCompleter {
 
         sender.sendMessage(messages().get("admin.source-located",
             "%player%", target.getName(),
-            "%x%", Messages.coordinate(source.getX()),
-            "%z%", Messages.coordinate(source.getZ()),
+            "%x%", source.getBlockX(),
+            "%y%", source.getBlockY(),
+            "%z%", source.getBlockZ(),
             "%world%", source.getWorld().getName()));
     }
 
     // /geiger move <player>         -> clear it; a new one is placed near them on their next hold
-    // /geiger move <player> <x> <z> -> specific coordinates
+    // /geiger move <player> <x> <z> -> buried under these coordinates
     private void handleMove(CommandSender sender, String[] args) {
         if (args.length != 2 && args.length != 4) {
             sender.sendMessage(messages().get("admin.move-usage"));
@@ -173,8 +174,9 @@ public class GeigerCommand implements CommandExecutor, TabCompleter {
 
         sender.sendMessage(messages().get("admin.move-success",
             "%player%", name,
-            "%x%", Messages.coordinate(source.getX()),
-            "%z%", Messages.coordinate(source.getZ())));
+            "%x%", source.getBlockX(),
+            "%y%", source.getBlockY(),
+            "%z%", source.getBlockZ()));
     }
 
     // /geiger limits <player> -> how many collections that player has left

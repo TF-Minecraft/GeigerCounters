@@ -26,9 +26,10 @@ public class geiger_counter extends JavaPlugin {
 
         GeigerManager.getInstance(this).initialize();
 
-        GeigerCommand geigerCommand = new GeigerCommand(GeigerManager.getInstance());
+        GeigerCommand geigerCommand = new GeigerCommand(GeigerManager.getInstance(), getServer().getOfflinePlayers());
         getCommand("geiger").setExecutor(geigerCommand);
         getCommand("geiger").setTabCompleter(geigerCommand);
+        getServer().getPluginManager().registerEvents(geigerCommand, this);
 
         setupMetrics();
 

@@ -52,7 +52,7 @@ class GeigerCommandTest {
     when(config.isLimitEnabled()).thenReturn(true);
     when(plugin.getConfig()).thenReturn(new YamlConfiguration());
     when(world.getName()).thenReturn("world");
-    command = new GeigerCommand(manager);
+    command = new GeigerCommand(manager, new OfflinePlayer[0]);
   }
 
   void run(String... args) {
@@ -265,12 +265,54 @@ class GeigerCommandTest {
   void playerArgumentsCompleteOnlinePlayerNamesCaseInsensitively() {
     Player first = mock(Player.class), second = mock(Player.class);
     when(first.getName()).thenReturn("Hunter");
+    when(first.getUniqueId()).thenReturn(UUID.randomUUID());
     when(second.getName()).thenReturn("Other");
+    when(second.getUniqueId()).thenReturn(UUID.randomUUID());
     try (var bukkit = mockStatic(Bukkit.class)) {
       bukkit.when(Bukkit::getOnlinePlayers).thenReturn(List.of(first, second));
       for (String alias : List.of("locate", "move", "limit", "limits", "resetlimit", "resetlimits")) {
         assertEquals(List.of("Hunter"), complete(sender, alias, "HU"));
       }
+    }
+  }
+
+  @Test
+  void limitCompletionUsesKnownOfflineNamesAndJoinUpdatesWithoutProfileLookups() {
+    UUID knownId = UUID.randomUUID();
+    OfflinePlayer known = mock(OfflinePlayer.class), unnamed = mock(OfflinePlayer.class),
+        unknown = mock(OfflinePlayer.class);
+    when(known.getUniqueId()).thenReturn(knownId);
+    when(known.getName()).thenReturn("OldName");
+    when(known.hasPlayedBefore()).thenReturn(true);
+    when(unknown.getName()).thenReturn("NeverPlayed");
+    command = new GeigerCommand(manager, new OfflinePlayer[] {known, unnamed, unknown});
+    Player joined = mock(Player.class), online = mock(Player.class);
+    when(joined.getUniqueId()).thenReturn(knownId);
+    when(joined.getName()).thenReturn("RenamedHunter");
+    when(online.getUniqueId()).thenReturn(UUID.randomUUID());
+    when(online.getName()).thenReturn("Online");
+    var join = mock(org.bukkit.event.player.PlayerJoinEvent.class);
+    when(join.getPlayer()).thenReturn(joined);
+    try (var bukkit = mockStatic(Bukkit.class)) {
+      bukkit.when(Bukkit::getOnlinePlayers).thenReturn(List.of(online));
+      for (String action : List.of("limit", "limits", "resetlimit", "resetlimits")) {
+        assertEquals(List.of("OldName", "Online"), complete(sender, action, ""));
+        assertEquals(List.of("OldName"), complete(sender, action.toUpperCase(java.util.Locale.ROOT), "oLD"));
+        assertTrue(complete(sender, action, "absent").isEmpty());
+        assertTrue(complete(sender, action, "OldName", "").isEmpty());
+      }
+      for (String action : List.of("locate", "move")) {
+        assertEquals(List.of("Online"), complete(sender, action, ""));
+        assertTrue(complete(sender, action, "Old").isEmpty());
+      }
+      command.onJoin(join);
+      assertEquals(List.of("RenamedHunter"), complete(sender, "limits", "rEN"));
+      assertTrue(complete(sender, "resetlimits", "Old").isEmpty());
+      bukkit.when(Bukkit::getOnlinePlayers).thenReturn(List.of(joined, online));
+      assertEquals(List.of("RenamedHunter", "Online"), complete(sender, "limits", ""));
+      assertTrue(complete(sender).isEmpty());
+      bukkit.verify(Bukkit::getOfflinePlayers, never());
+      bukkit.verify(() -> Bukkit.getOfflinePlayer(anyString()), never());
     }
   }
 }

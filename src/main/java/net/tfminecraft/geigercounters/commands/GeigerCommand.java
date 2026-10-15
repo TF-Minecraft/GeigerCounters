@@ -8,6 +8,9 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerJoinEvent;
 import net.tfminecraft.geigercounters.config.GeigerConfiguration;
 import net.tfminecraft.geigercounters.config.Messages;
 import net.tfminecraft.geigercounters.managers.GeigerManager;
@@ -17,6 +20,10 @@ import net.tfminecraft.geigercounters.utils.Utils;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -24,14 +31,26 @@ import java.util.UUID;
 // Admin command handler:
 // /geiger <locate [player]|move <player> [x z]|limits <player>|resetlimits <player>|droplist [name]|reload>
 // ====================================
-public class GeigerCommand implements CommandExecutor, TabCompleter {
+public class GeigerCommand implements CommandExecutor, TabCompleter, Listener {
 
     private static final List<String> SUBCOMMANDS = Arrays.asList("locate", "move", "limits", "resetlimits", "droplist", "reload");
 
     private final GeigerManager manager;
+    private final Map<UUID, String> knownNames = new LinkedHashMap<>();
 
-    public GeigerCommand(GeigerManager manager) {
+    public GeigerCommand(GeigerManager manager, OfflinePlayer[] knownPlayers) {
         this.manager = manager;
+        for (OfflinePlayer player : knownPlayers) {
+            if (player.getName() != null && player.hasPlayedBefore()) {
+                knownNames.put(player.getUniqueId(), player.getName());
+            }
+        }
+    }
+
+    @EventHandler
+    public void onJoin(PlayerJoinEvent event) {
+        Player player = event.getPlayer();
+        knownNames.put(player.getUniqueId(), player.getName());
     }
 
     // Fetched per use rather than cached - /geiger reload swaps the file
@@ -322,6 +341,7 @@ public class GeigerCommand implements CommandExecutor, TabCompleter {
 
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
+        if (args.length == 0) return List.of();
         if (args.length == 1) {
             List<String> matches = new ArrayList<>();
             for (String sub : SUBCOMMANDS) {
@@ -350,13 +370,17 @@ public class GeigerCommand implements CommandExecutor, TabCompleter {
 
         // locate, move and both limit subcommands (either spelling) take a player name
         if (args.length == 2 && takesPlayer(args[0])) {
-            List<String> matches = new ArrayList<>();
-            for (Player player : Bukkit.getOnlinePlayers()) {
-                if (player.getName().toLowerCase().startsWith(args[1].toLowerCase())) {
-                    matches.add(player.getName());
-                }
+            Map<UUID, String> names = new LinkedHashMap<>();
+            if (args[0].equalsIgnoreCase("limit") || args[0].equalsIgnoreCase("limits")
+                    || args[0].equalsIgnoreCase("resetlimit") || args[0].equalsIgnoreCase("resetlimits")) {
+                names.putAll(knownNames);
             }
-            return matches;
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                names.put(player.getUniqueId(), player.getName());
+            }
+            return new LinkedHashSet<>(names.values()).stream()
+                    .filter(name -> name.toLowerCase(Locale.ROOT).startsWith(args[1].toLowerCase(Locale.ROOT)))
+                    .toList();
         }
 
         return new ArrayList<>();

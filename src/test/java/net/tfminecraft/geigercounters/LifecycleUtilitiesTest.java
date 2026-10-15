@@ -49,6 +49,11 @@ public class LifecycleUtilitiesTest {
       bukkit.when(Bukkit::getUnsafe).thenReturn(mock(UnsafeValues.class));
       assertNotNull(new TestPluginLoader().definePluginSubclass().getConstructor().newInstance());
       geiger_counter plugin = mock(geiger_counter.class, CALLS_REAL_METHODS);
+      Server server = mock(Server.class);
+      var pluginManager = mock(org.bukkit.plugin.PluginManager.class);
+      doReturn(server).when(plugin).getServer();
+      when(server.getOfflinePlayers()).thenReturn(new OfflinePlayer[0]);
+      when(server.getPluginManager()).thenReturn(pluginManager);
       doReturn(Logger.getAnonymousLogger()).when(plugin).getLogger();
       doNothing().when(plugin).saveDefaultConfig();
       PluginCommand command = mock(PluginCommand.class);
@@ -61,6 +66,7 @@ public class LifecycleUtilitiesTest {
       verify(manager).initialize();
       verify(command).setExecutor(any());
       verify(command).setTabCompleter(any());
+      verify(pluginManager).registerEvents(any(net.tfminecraft.geigercounters.commands.GeigerCommand.class), eq(plugin));
       Metrics created = metrics.constructed().getFirst();
       ArgumentCaptor<CustomChart> charts = ArgumentCaptor.forClass(CustomChart.class);
       verify(created, times(4)).addCustomChart(charts.capture());

@@ -79,6 +79,9 @@ public class CacheMenu implements Listener {
         if (!(top.getHolder() instanceof Holder)) {
             return;
         }
+        // Paper's drops are the inventory's own stacks; copy them first, or
+        // loot merged into a stack would also grow the drop of that stack
+        event.getDrops().replaceAll(drop -> drop == null ? null : drop.clone());
         for (ItemStack item : take(top)) {
             int amount = item.getAmount();
             ItemStack copy = item.clone();

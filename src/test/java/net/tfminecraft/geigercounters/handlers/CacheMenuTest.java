@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -177,6 +178,22 @@ class CacheMenuTest {
     verify(copy).setAmount(5);
     assertEquals(List.of(copy), drops);
     verify(window).clear();
+  }
+
+  @Test
+  void dropsSharingAnInventoryStackAreCopiedBeforeLootMergesIntoIt() {
+    InventoryHolder holder = open(null);
+    ItemStack copy = mock(ItemStack.class), left = stack(4, copy);
+    ItemStack shared = mock(ItemStack.class), detached = mock(ItemStack.class);
+    when(shared.clone()).thenReturn(detached);
+    when(window.getHolder()).thenReturn(holder);
+    when(window.getContents()).thenReturn(new ItemStack[] {left});
+    List<ItemStack> drops = new ArrayList<>(Arrays.asList(shared, null));
+    menu.onDeath(death(window, false, drops));
+    assertEquals(Arrays.asList(detached, null, copy), drops);
+    var order = inOrder(shared, pockets);
+    order.verify(shared).clone();
+    order.verify(pockets).addItem(left);
   }
 
   @Test

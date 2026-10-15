@@ -367,8 +367,17 @@ class SourceHandlerTest {
     when(messages.get("player.dead-geiger")).thenReturn("Spent.");
     place();
     collect(EquipmentSlot.HAND);
-    verify(player).sendMessage("Found! Spent.");
+    verify(player).sendMessage("Found! \u00a7rSpent.");
     verify(player, times(1)).sendMessage(anyString());
+  }
+
+  @Test
+  void theFirstHalfsFormattingDoesNotCarryIntoTheSecond() {
+    when(messages.get("player.found-source")).thenReturn("\u00a75\u00a7oFound!");
+    when(messages.get("player.dead-geiger")).thenReturn("\u00a7lSpent.");
+    place();
+    collect(EquipmentSlot.HAND);
+    verify(player).sendMessage("\u00a75\u00a7oFound! \u00a7r\u00a7lSpent.");
   }
 
   @Test

@@ -2,6 +2,7 @@ package net.tfminecraft.geigercounters.handlers;
 
 import net.tfminecraft.tlibs.objects.api.ItemAPI;
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.Chunk;
 import org.bukkit.Location;
 import org.bukkit.Sound;
@@ -311,6 +312,7 @@ public class SourceHandler {
     }
 
     // One line: the find, then the spent counter. A blank half is left out.
+    // A reset between them stops the first half's colour and format carrying over.
     private void notifyPlayerOfCollection(Player player) {
         String found = config.getMessages().get("player.found-source");
         String spent = config.getMessages().get("player.dead-geiger");
@@ -321,7 +323,7 @@ public class SourceHandler {
             }
             return;
         }
-        player.sendMessage(found + " " + spent);
+        player.sendMessage(found + " " + ChatColor.RESET + spent);
     }
 
     private void replaceGeigerWithDeadVersion(Player player, EquipmentSlot geigerSlot) {

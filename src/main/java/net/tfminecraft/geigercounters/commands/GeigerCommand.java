@@ -11,14 +11,18 @@ import org.bukkit.entity.Player;
 import net.tfminecraft.geigercounters.config.GeigerConfiguration;
 import net.tfminecraft.geigercounters.config.Messages;
 import net.tfminecraft.geigercounters.managers.GeigerManager;
+import net.tfminecraft.geigercounters.utils.Hunters;
 import net.tfminecraft.geigercounters.utils.Utils;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
 // ====================================
-// Admin command handler: /geiger <locate|move [x z]|limits [player]|resetlimits <player>|droplist [name]|reload>
+// Admin command handler:
+// /geiger <locate [player]|move <player> [x z]|limits <player>|resetlimits <player>|droplist [name]|reload>
 // ====================================
 public class GeigerCommand implements CommandExecutor, TabCompleter {
 
@@ -44,7 +48,7 @@ public class GeigerCommand implements CommandExecutor, TabCompleter {
 
         switch (args[0].toLowerCase()) {
             case "locate":
-                handleLocate(sender);
+                handleLocate(sender, args);
                 return true;
             case "move":
                 handleMove(sender, args);
@@ -70,59 +74,105 @@ public class GeigerCommand implements CommandExecutor, TabCompleter {
         }
     }
 
-    private void handleLocate(CommandSender sender) {
-        Location source = manager.getSourceHandler().getSourceLocation();
+    // /geiger locate          -> the sender's own source
+    // /geiger locate <player> -> that player's current character's source
+    private void handleLocate(CommandSender sender, String[] args) {
+        if (args.length > 2 || (args.length == 1 && !(sender instanceof Player))) {
+            sender.sendMessage(messages().get("admin.locate-usage"));
+            return;
+        }
+
+        Player target = args.length == 2 ? onlineTarget(sender, args[1]) : (Player) sender;
+        UUID hunter = target == null ? null : hunterOf(sender, target);
+        if (hunter == null) {
+            return;
+        }
+
+        if (manager.getSourceHandler().isPlacing(hunter)) {
+            sender.sendMessage(messages().get("admin.source-relocating", "%player%", target.getName()));
+            return;
+        }
+
+        Location source = manager.getSourceHandler().getSource(hunter);
         if (source == null) {
-            sender.sendMessage(messages().get("admin.source-relocating"));
+            sender.sendMessage(messages().get("admin.no-source", "%player%", target.getName()));
             return;
         }
 
         sender.sendMessage(messages().get("admin.source-located",
+            "%player%", target.getName(),
             "%x%", Messages.coordinate(source.getX()),
             "%z%", Messages.coordinate(source.getZ()),
             "%world%", source.getWorld().getName()));
     }
 
-    // /geiger move       -> random location
-    // /geiger move <x> <z> -> specific coordinates
+    // /geiger move <player>         -> clear it; a new one is placed near them on their next hold
+    // /geiger move <player> <x> <z> -> specific coordinates
     private void handleMove(CommandSender sender, String[] args) {
-        if (args.length == 1) {
-            sender.sendMessage(messages().get("admin.move-searching"));
-            manager.getSourceHandler().moveSourceToRandomLocation()
-                .thenAccept(location -> sendNewLocation(sender, location));
-            return;
-        }
-
-        if (args.length != 3) {
+        if (args.length != 2 && args.length != 4) {
             sender.sendMessage(messages().get("admin.move-usage"));
             return;
         }
 
-        double x;
-        double z;
-        try {
-            x = Double.parseDouble(args[1]);
-            z = Double.parseDouble(args[2]);
-            if (!Double.isFinite(x) || !Double.isFinite(z)) {
-                throw new NumberFormatException("Coordinates must be finite");
+        double x = 0;
+        double z = 0;
+        if (args.length == 4) {
+            try {
+                x = Double.parseDouble(args[2]);
+                z = Double.parseDouble(args[3]);
+                if (!Double.isFinite(x) || !Double.isFinite(z)) {
+                    throw new NumberFormatException("Coordinates must be finite");
+                }
+            } catch (NumberFormatException e) {
+                sender.sendMessage(messages().get("admin.move-invalid-coords"));
+                return;
             }
-        } catch (NumberFormatException e) {
-            sender.sendMessage(messages().get("admin.move-invalid-coords"));
+        }
+
+        Player target = onlineTarget(sender, args[1]);
+        UUID hunter = target == null ? null : hunterOf(sender, target);
+        if (hunter == null) {
             return;
         }
 
-        manager.getSourceHandler().moveSourceToLocation(x, z)
-            .thenAccept(location -> sendNewLocation(sender, location));
+        if (args.length == 2) {
+            manager.getSourceHandler().clear(hunter);
+            sender.sendMessage(messages().get("admin.move-cleared", "%player%", target.getName()));
+            return;
+        }
+
+        String name = target.getName();
+        manager.getSourceHandler().placeAt(hunter, x, z)
+            .thenAccept(location -> sendNewLocation(sender, name, location));
+    }
+
+    // Sources belong to characters, so the target has to be online to know which one
+    private Player onlineTarget(CommandSender sender, String name) {
+        Player target = Bukkit.getPlayerExact(name);
+        if (target == null) {
+            sender.sendMessage(messages().get("admin.player-offline", "%player%", name));
+        }
+        return target;
+    }
+
+    private UUID hunterOf(CommandSender sender, Player target) {
+        Optional<UUID> hunter = Hunters.of(target);
+        if (hunter.isEmpty()) {
+            sender.sendMessage(messages().get("admin.no-character", "%player%", target.getName()));
+            return null;
+        }
+        return hunter.get();
     }
 
     // Called once the chunk load behind the move has resolved
-    private void sendNewLocation(CommandSender sender, Location source) {
+    private void sendNewLocation(CommandSender sender, String name, Location source) {
         if (source == null) {
             sender.sendMessage(messages().get("admin.move-failed"));
             return;
         }
 
         sender.sendMessage(messages().get("admin.move-success",
+            "%player%", name,
             "%x%", Messages.coordinate(source.getX()),
             "%z%", Messages.coordinate(source.getZ())));
     }
@@ -236,7 +286,7 @@ public class GeigerCommand implements CommandExecutor, TabCompleter {
     // X for the first, Z for the second.
     // ====================================
     private List<String> completeCoordinate(CommandSender sender, String[] args) {
-        boolean isX = args.length == 2;
+        boolean isX = args.length == 3;
         String typed = args[args.length - 1];
 
         List<String> suggestions = new ArrayList<>();
@@ -264,8 +314,9 @@ public class GeigerCommand implements CommandExecutor, TabCompleter {
         return String.valueOf((long) Math.floor(value));
     }
 
-    private static boolean isLimitSubcommand(String argument) {
-        return argument.equalsIgnoreCase("limit") || argument.equalsIgnoreCase("limits")
+    private static boolean takesPlayer(String argument) {
+        return argument.equalsIgnoreCase("locate") || argument.equalsIgnoreCase("move")
+            || argument.equalsIgnoreCase("limit") || argument.equalsIgnoreCase("limits")
             || argument.equalsIgnoreCase("resetlimit") || argument.equalsIgnoreCase("resetlimits");
     }
 
@@ -281,8 +332,8 @@ public class GeigerCommand implements CommandExecutor, TabCompleter {
             return matches;
         }
 
-        // Coordinates for /geiger move <x> <z>
-        if (args[0].equalsIgnoreCase("move") && (args.length == 2 || args.length == 3)) {
+        // Coordinates for /geiger move <player> <x> <z>
+        if (args[0].equalsIgnoreCase("move") && (args.length == 3 || args.length == 4)) {
             return completeCoordinate(sender, args);
         }
 
@@ -297,8 +348,8 @@ public class GeigerCommand implements CommandExecutor, TabCompleter {
             return matches;
         }
 
-        // Both limit subcommands (either spelling) take a player name
-        if (args.length == 2 && isLimitSubcommand(args[0])) {
+        // locate, move and both limit subcommands (either spelling) take a player name
+        if (args.length == 2 && takesPlayer(args[0])) {
             List<String> matches = new ArrayList<>();
             for (Player player : Bukkit.getOnlinePlayers()) {
                 if (player.getName().toLowerCase().startsWith(args[1].toLowerCase())) {

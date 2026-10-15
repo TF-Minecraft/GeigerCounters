@@ -9,11 +9,14 @@
 
 
 # ====================================
-# PLAYER - seen by anyone hunting the source
+# PLAYER - seen by anyone hunting a source
 # ====================================
 player:
-  # Shown when a player finds the radioactive source
-  found-source: "&#AA00FFYou have found the source of Arcane Radiation! &#FFFF00The source has moved."
+  # Shown when a player finds their radioactive source
+  found-source: "&#AA00FFYou have found the source of Arcane Radiation!"
+
+  # Title of the signal bar shown while holding a detector
+  signal-bar: "&#AA00FFArcane signal"
 
   # Shown when the Geiger Counter burns out after finding the source
   dead-geiger: "&7Your Arcane Trace Detector has run out of fuel."
@@ -30,22 +33,33 @@ player:
 # ====================================
 admin:
   # /geiger with no arguments, or an unknown subcommand
-  usage: "&eUsage: /geiger <locate|move [x z]|limits <player>|resetlimits <player>|droplist [name]|reload>"
+  usage: "&eUsage: /geiger <locate [player]|move <player> [x z]|limits <player>|resetlimits <player>|droplist [name]|reload>"
 
-  # /geiger locate
-  # %x% %z% = source coordinates, %world% = world name
-  source-located: "&aRadioactive source is at X = %x% Z = %z% (world: %world%)"
+  # /geiger locate from the console without a player
+  locate-usage: "&cUsage: /geiger locate <player>"
 
-  # /geiger locate while the source is mid-relocation
-  source-relocating: "&cNo active radioactive source - it is being relocated right now."
+  # /geiger locate [player]
+  # %player% = whose source, %x% %z% = source coordinates, %world% = world name
+  source-located: "&a%player%'s source is at X = %x% Z = %z% (world: %world%)"
 
-  # /geiger move
-  move-searching: "&7Searching for a new source location..."
-  move-usage: "&cUsage: /geiger move [x z]"
-  move-invalid-coords: "&cCoordinates must be numbers. Usage: /geiger move [x z]"
+  # /geiger locate while that source is still being placed
+  source-relocating: "&c%player%'s source is being placed right now."
+
+  # /geiger locate for someone with no source yet
+  no-source: "&7%player% has no source. One is placed near them when they hold a live detector."
+
+  # locate or move naming someone who is not online, or not playing a character
+  player-offline: "&c%player% is not online."
+  no-character: "&c%player% is not playing a character right now."
+
+  # /geiger move <player> [x z]
+  move-usage: "&cUsage: /geiger move <player> [x z]"
+  move-invalid-coords: "&cCoordinates must be numbers. Usage: /geiger move <player> [x z]"
   move-failed: "&cThe source could not be moved."
-  # %x% %z% = where the source ended up
-  move-success: "&aRadioactive source moved to X = %x% Z = %z%"
+  # %player% = whose source was cleared
+  move-cleared: "&a%player%'s source cleared. A new one is placed near them when they next hold a detector."
+  # %player% = whose source, %x% %z% = where it ended up
+  move-success: "&a%player%'s source moved to X = %x% Z = %z%"
 
   # /geiger limits <player>
   limits-usage: "&cUsage: /geiger limits <player>"

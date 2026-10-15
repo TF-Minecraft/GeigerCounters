@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.logging.Logger;
@@ -19,10 +21,12 @@ import org.bukkit.inventory.*;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 class SourceHandlerTest {
+  @TempDir Path directory;
   JavaPlugin plugin;
   GeigerConfiguration config;
   ItemAPI api;
@@ -33,23 +37,27 @@ class SourceHandlerTest {
   Player player;
   PlayerInventory inventory;
   Messages messages;
+  UUID hunter = UUID.randomUUID();
+  Location origin;
 
   @BeforeEach
   void setup() {
     plugin = mock(JavaPlugin.class);
     when(plugin.isEnabled()).thenReturn(true);
     when(plugin.getLogger()).thenReturn(Logger.getAnonymousLogger());
+    when(plugin.getDataFolder()).thenReturn(directory.toFile());
     config = mock(GeigerConfiguration.class);
     api = mock(ItemAPI.class, RETURNS_DEEP_STUBS);
     filter = mock(SpawnLocationFilter.class);
     limits = mock(DropLimitManager.class);
     world = mock(World.class);
+    when(world.getName()).thenReturn("world");
     when(config.getWorld()).thenReturn(world);
     when(config.getSpawnFilters()).thenReturn(new GeigerConfiguration.SpawnFilterConfig());
-    when(config.getMinX()).thenReturn(-0.5);
-    when(config.getMaxX()).thenReturn(-0.5);
-    when(config.getMinZ()).thenReturn(-16.5);
-    when(config.getMaxZ()).thenReturn(-16.5);
+    when(config.getMinX()).thenReturn(-5000.0);
+    when(config.getMaxX()).thenReturn(5000.0);
+    when(config.getMinZ()).thenReturn(-5000.0);
+    when(config.getMaxZ()).thenReturn(5000.0);
     when(world.getHighestBlockYAt(anyInt(), anyInt())).thenReturn(70);
     when(world.getChunkAtAsync(anyInt(), anyInt(), eq(true)))
         .thenReturn(CompletableFuture.completedFuture(mock(Chunk.class)));
@@ -67,67 +75,108 @@ class SourceHandlerTest {
     when(player.getUniqueId()).thenReturn(UUID.randomUUID());
     when(player.getName()).thenReturn("Hunter");
     when(player.getWorld()).thenReturn(world);
-    when(player.getLocation()).thenReturn(new Location(world, -0.5, 71, -16.5));
+    origin = new Location(world, -0.5, 71, -16.5);
+    when(player.getLocation()).thenReturn(origin);
     when(limits.canCollect(player)).thenReturn(true);
     handler = new SourceHandler(plugin, config, api, filter, limits);
   }
 
   void place() {
-    handler.moveSourceToLocation(-0.5, -16.5).join();
+    handler.placeAt(hunter, -0.5, -16.5).join();
   }
 
   @Test
-  void randomPlacementFloorsNegativeBlockCoordinatesAndSnapsToSurface() {
-    Location loc = handler.moveSourceToRandomLocation().join();
+  void placementWithZeroRingFloorsNegativeBlockCoordinatesAndSnapsToSurface() {
+    Location loc = handler.placeNear(hunter, origin).join();
     assertEquals(-0.5, loc.getX());
     assertEquals(-16.5, loc.getZ());
     assertEquals(71, loc.getY());
     assertSame(world, loc.getWorld());
     verify(world).getChunkAtAsync(-1, -2, true);
     verify(world).getHighestBlockYAt(-1, -17);
-    assertSame(loc, handler.getSourceLocation());
+    assertSame(loc, handler.getSource(hunter));
+    assertFalse(handler.isPlacing(hunter));
+    assertNull(handler.getSource(UUID.randomUUID()));
+    assertTrue(Files.exists(directory.resolve("sources.yml")));
   }
 
   @Test
-  void concurrentRandomMovesShareSearchAndHideOldSource() {
+  void placementLandsInsideTheRingAroundTheOrigin() {
+    when(config.getMinSourceDistance()).thenReturn(150.0);
+    when(config.getMaxSourceDistance()).thenReturn(500.0);
+    for (int run = 0; run < 200; run++) {
+      Location loc = handler.placeNear(hunter, origin).join();
+      double distance = Math.hypot(loc.getX() - origin.getX(), loc.getZ() - origin.getZ());
+      assertTrue(distance >= 150 - 1e-9 && distance <= 500 + 1e-9, "distance " + distance);
+    }
+  }
+
+  @Test
+  void placementIsClampedIntoTheConfiguredArea() {
+    when(config.getMinSourceDistance()).thenReturn(150.0);
+    when(config.getMaxSourceDistance()).thenReturn(500.0);
+    when(config.getMinX()).thenReturn(0.0);
+    when(config.getMaxX()).thenReturn(10.0);
+    when(config.getMinZ()).thenReturn(-20.0);
+    when(config.getMaxZ()).thenReturn(-10.0);
+    for (int run = 0; run < 50; run++) {
+      Location loc = handler.placeNear(hunter, origin).join();
+      assertTrue(loc.getX() >= 0 && loc.getX() <= 10);
+      assertTrue(loc.getZ() >= -20 && loc.getZ() <= -10);
+    }
+  }
+
+  @Test
+  void concurrentPlacementsShareSearchAndHideOldSource() {
     place();
     CompletableFuture<Chunk> future = new CompletableFuture<>();
     when(world.getChunkAtAsync(anyInt(), anyInt(), eq(true))).thenReturn(future);
-    var first = handler.moveSourceToRandomLocation();
-    assertSame(first, handler.moveSourceToRandomLocation());
-    assertNull(handler.getSourceLocation());
+    var first = handler.placeNear(hunter, origin);
+    assertSame(first, handler.placeNear(hunter, origin));
+    assertNull(handler.getSource(hunter));
+    assertTrue(handler.isPlacing(hunter));
     assertFalse(first.isDone());
     future.complete(mock(Chunk.class));
     assertNotNull(first.join());
+    assertFalse(handler.isPlacing(hunter));
   }
 
   @Test
-  void rejectedRandomCandidatesRetryThenAccept() {
+  void huntersHaveSeparateSources() {
+    UUID other = UUID.randomUUID();
+    place();
+    handler.placeAt(other, 30, 40).join();
+    assertEquals(-0.5, handler.getSource(hunter).getX());
+    assertEquals(30, handler.getSource(other).getX());
+  }
+
+  @Test
+  void rejectedCandidatesRetryThenAccept() {
     when(filter.check(any())).thenReturn(SpawnLocationFilter.Rejection.LIQUID, null);
-    assertNotNull(handler.moveSourceToRandomLocation().join());
+    assertNotNull(handler.placeNear(hunter, origin).join());
     verify(filter, times(2)).check(any());
   }
 
   @Test
   void exhaustedAttemptsUseLastCandidateAsDocumented() {
     when(filter.check(any())).thenReturn(SpawnLocationFilter.Rejection.VOID);
-    assertNotNull(handler.moveSourceToRandomLocation().join());
+    assertNotNull(handler.placeNear(hunter, origin).join());
     verify(filter, times(config.getSpawnFilters().getMaxAttempts())).check(any());
   }
 
   @Test
-  void disabledPluginCompletesBothKindsOfMovementWithoutSource() {
+  void disabledPluginCompletesBothKindsOfPlacementWithoutSource() {
     when(plugin.isEnabled()).thenReturn(false);
-    assertNull(handler.moveSourceToRandomLocation().join());
-    assertNull(handler.moveSourceToLocation(1, 2).join());
-    assertNull(handler.getSourceLocation());
+    assertNull(handler.placeNear(hunter, origin).join());
+    assertNull(handler.placeAt(hunter, 1, 2).join());
+    assertNull(handler.getSource(hunter));
     verifyNoInteractions(filter);
   }
 
   @Test
   void explicitPlacementBypassesFilters() {
     when(filter.check(any())).thenReturn(SpawnLocationFilter.Rejection.BLOCKED_BLOCK);
-    Location loc = handler.moveSourceToLocation(34, 65).join();
+    Location loc = handler.placeAt(hunter, 34, 65).join();
     assertEquals(34, loc.getX());
     assertEquals(65, loc.getZ());
   }
@@ -136,55 +185,109 @@ class SourceHandlerTest {
   void chunkFailureStillAttemptsDocumentedSurfaceFallback() {
     when(world.getChunkAtAsync(anyInt(), anyInt(), eq(true)))
         .thenReturn(CompletableFuture.failedFuture(new IllegalStateException("load failed")));
-    assertNotNull(handler.moveSourceToLocation(1, 2).join());
-    assertNotNull(handler.moveSourceToRandomLocation().join());
+    assertNotNull(handler.placeAt(hunter, 1, 2).join());
+    assertNotNull(handler.placeNear(hunter, origin).join());
   }
 
   @Test
-  void distanceAndRelocationGuardsDoNotConsumeLimits() {
-    handler.tryCollectSource(player, 1, EquipmentSlot.HAND);
+  void distanceAndMissingSourceGuardsDoNotConsumeLimits() {
+    handler.tryCollectSource(player, hunter, 1, EquipmentSlot.HAND);
     place();
-    handler.tryCollectSource(player, 20.01, EquipmentSlot.HAND);
+    handler.tryCollectSource(player, hunter, 20.01, EquipmentSlot.HAND);
     verifyNoInteractions(limits);
   }
 
   @Test
-  void currentSourceWorldAndDistanceOverrideStaleCallerDistance() {
-    place();
-    when(player.getLocation()).thenReturn(new Location(mock(World.class), -0.5, 71, -16.5));
-    handler.tryCollectSource(player, 0, EquipmentSlot.HAND);
-    when(player.getLocation()).thenReturn(new Location(world, 1000, 71, 1000));
-    handler.tryCollectSource(player, 0, EquipmentSlot.HAND);
-    verifyNoInteractions(limits);
-  }
-
-  @Test
-  void pendingManualMoveHidesPreviousSourceAndSupersedesRandomMove() {
+  void pendingManualMoveHidesPreviousSourceAndSupersedesPlacement() {
     place();
     CompletableFuture<Chunk> randomChunk = new CompletableFuture<>(),
         manualChunk = new CompletableFuture<>();
     when(world.getChunkAtAsync(anyInt(), anyInt(), eq(true))).thenReturn(randomChunk, manualChunk);
-    var random = handler.moveSourceToRandomLocation();
-    var manual = handler.moveSourceToLocation(30, 40);
-    assertNull(handler.getSourceLocation());
+    var random = handler.placeNear(hunter, origin);
+    var manual = handler.placeAt(hunter, 30, 40);
+    assertNull(handler.getSource(hunter));
     manualChunk.complete(mock(Chunk.class));
     randomChunk.complete(mock(Chunk.class));
     assertNull(random.join());
-    assertSame(manual.join(), handler.getSourceLocation());
-    assertEquals(30, handler.getSourceLocation().getX());
+    assertSame(manual.join(), handler.getSource(hunter));
+    assertEquals(30, handler.getSource(hunter).getX());
+  }
+
+  @Test
+  void clearForgetsSourceAndCancelsPendingPlacement() throws Exception {
+    handler.clear(hunter);
+    assertFalse(Files.exists(directory.resolve("sources.yml")));
+    place();
+    handler.clear(hunter);
+    assertNull(handler.getSource(hunter));
+    assertFalse(Files.readString(directory.resolve("sources.yml")).contains(hunter.toString()));
+    CompletableFuture<Chunk> chunk = new CompletableFuture<>();
+    when(world.getChunkAtAsync(anyInt(), anyInt(), eq(true))).thenReturn(chunk);
+    var pending = handler.placeNear(hunter, origin);
+    handler.clear(hunter);
+    assertFalse(handler.isPlacing(hunter));
+    chunk.complete(mock(Chunk.class));
+    assertNull(pending.join());
+    assertNull(handler.getSource(hunter));
+  }
+
+  @Test
+  void sourcesSurviveARestart() {
+    place();
+    SourceHandler restarted = new SourceHandler(plugin, config, api, filter, limits);
+    try (var b = mockStatic(Bukkit.class)) {
+      b.when(() -> Bukkit.getWorld("world")).thenReturn(world);
+      restarted.load();
+    }
+    Location loaded = restarted.getSource(hunter);
+    assertEquals(new Location(world, -0.5, 71, -16.5), loaded);
+  }
+
+  @Test
+  void loadSkipsBadExpiredAndUnloadedEntries() throws Exception {
+    handler.load();
+    Files.writeString(directory.resolve("sources.yml"), "other: 1\n");
+    handler.load();
+    UUID expired = UUID.randomUUID(), unloaded = UUID.randomUUID(), kept = UUID.randomUUID();
+    long now = System.currentTimeMillis();
+    Files.writeString(
+        directory.resolve("sources.yml"),
+        String.join(
+            "\n",
+            "sources:",
+            "  not-a-uuid: {world: world, x: 1, y: 2, z: 3, placed: " + now + "}",
+            "  " + UUID.randomUUID() + ": scalar",
+            "  " + expired + ": {world: world, x: 1, y: 2, z: 3, placed: " + (now - 31L * 86_400_000L) + "}",
+            "  " + unloaded + ": {world: gone, x: 1, y: 2, z: 3, placed: " + now + "}",
+            "  " + kept + ": {world: world, x: 1, y: 2, z: 3, placed: " + now + "}",
+            ""));
+    try (var b = mockStatic(Bukkit.class)) {
+      b.when(() -> Bukkit.getWorld("world")).thenReturn(world);
+      handler.load();
+    }
+    assertNull(handler.getSource(expired));
+    assertNull(handler.getSource(unloaded));
+    assertEquals(new Location(world, 1, 2, 3), handler.getSource(kept));
+  }
+
+  @Test
+  void saveFailureIsLoggedWithoutLosingTheSource() throws Exception {
+    Files.createDirectory(directory.resolve("sources.yml"));
+    place();
+    assertNotNull(handler.getSource(hunter));
   }
 
   @Test
   void limitedPlayerReceivesOneWarningWithoutMovingSource() {
     place();
-    Location old = handler.getSourceLocation();
+    Location old = handler.getSource(hunter);
     when(limits.canCollect(player)).thenReturn(false);
     when(config.getLimitDrops()).thenReturn(3);
     when(config.getLimitWindowMillis()).thenReturn(60000L);
-    handler.tryCollectSource(player, 10, EquipmentSlot.HAND);
-    handler.tryCollectSource(player, 10, EquipmentSlot.HAND);
+    handler.tryCollectSource(player, hunter, 10, EquipmentSlot.HAND);
+    handler.tryCollectSource(player, hunter, 10, EquipmentSlot.HAND);
     verify(player, times(1)).sendMessage("message");
-    assertSame(old, handler.getSourceLocation());
+    assertSame(old, handler.getSource(hunter));
     verify(limits, never()).recordCollection(any());
   }
 
@@ -192,7 +295,7 @@ class SourceHandlerTest {
     PluginManager plugins = mock(PluginManager.class);
     try (var b = mockStatic(Bukkit.class)) {
       b.when(Bukkit::getPluginManager).thenReturn(plugins);
-      handler.tryCollectSource(player, 1, slot);
+      handler.tryCollectSource(player, hunter, 1, slot);
       verify(plugins).callEvent(any(GeigerSourceCollectEvent.class));
     }
   }
@@ -200,11 +303,11 @@ class SourceHandlerTest {
   @Test
   void collectionConsumesCounterRecordsLimitAndPublishesOriginalLocation() {
     place();
-    Location old = handler.getSourceLocation();
+    Location old = handler.getSource(hunter);
     PluginManager plugins = mock(PluginManager.class);
     try (var b = mockStatic(Bukkit.class)) {
       b.when(Bukkit::getPluginManager).thenReturn(plugins);
-      handler.tryCollectSource(player, 20, EquipmentSlot.HAND);
+      handler.tryCollectSource(player, hunter, 20, EquipmentSlot.HAND);
       verify(plugins)
           .callEvent(
               argThat(
@@ -217,6 +320,8 @@ class SourceHandlerTest {
     verify(inventory).setItemInMainHand(null);
     verify(inventory).addItem(any(ItemStack.class));
     verify(player).playSound(any(Location.class), eq(Sound.ENTITY_ITEM_BREAK), eq(1f), eq(1f));
+    assertNull(handler.getSource(hunter));
+    assertFalse(handler.isPlacing(hunter));
   }
 
   @Test
@@ -259,25 +364,25 @@ class SourceHandlerTest {
   void olderManualMovementCannotOverwriteNewerCompletedMovement() {
     CompletableFuture<Chunk> older = new CompletableFuture<>(), newer = new CompletableFuture<>();
     when(world.getChunkAtAsync(anyInt(), anyInt(), eq(true))).thenReturn(older, newer);
-    handler.moveSourceToLocation(1, 2);
-    handler.moveSourceToLocation(30, 40);
+    handler.placeAt(hunter, 1, 2);
+    handler.placeAt(hunter, 30, 40);
     newer.complete(mock(Chunk.class));
     older.complete(mock(Chunk.class));
-    assertEquals(30, handler.getSourceLocation().getX());
-    assertEquals(40, handler.getSourceLocation().getZ());
+    assertEquals(30, handler.getSource(hunter).getX());
+    assertEquals(40, handler.getSource(hunter).getZ());
   }
 
   @Test
   void limitWarningCanBeSentAgainAfterItsCooldown() throws Exception {
     place();
     when(limits.canCollect(player)).thenReturn(false);
-    handler.tryCollectSource(player, 0, EquipmentSlot.HAND);
+    handler.tryCollectSource(player, hunter, 0, EquipmentSlot.HAND);
     var field = SourceHandler.class.getDeclaredField("lastLimitMessage");
     field.setAccessible(true);
     @SuppressWarnings("unchecked")
     Map<UUID, Long> sent = (Map<UUID, Long>) field.get(handler);
     sent.put(player.getUniqueId(), System.currentTimeMillis() - 16000);
-    handler.tryCollectSource(player, 0, EquipmentSlot.HAND);
+    handler.tryCollectSource(player, hunter, 0, EquipmentSlot.HAND);
     verify(player, times(2)).sendMessage("message");
   }
 
@@ -296,7 +401,7 @@ class SourceHandlerTest {
     field.set(handler, random);
     double[] draws = {0.1, 0.5, 0.9};
     for (int index = 0; index < draws.length; index++) {
-      // Two source coordinates are sampled before the reward draw.
+      // Placement samples an angle and a radius before the reward draw.
       when(random.nextDouble()).thenReturn(draws[index]);
       place();
       collect(EquipmentSlot.HAND);

@@ -45,6 +45,11 @@ public class GeigerConfiguration {
     private World world;
     private double minX, maxX, minZ, maxZ;
 
+    // Where each character's source is placed, relative to the character
+    private double minSourceDistance;
+    private double maxSourceDistance;
+    private double rerollDistance;
+
     // Spawn location filters
     private SpawnFilterConfig spawnFilters = new SpawnFilterConfig();
 
@@ -55,6 +60,11 @@ public class GeigerConfiguration {
     private double threeRingsDistance;
     private double twoRingsDistance;
     
+    // Signal bar
+    private boolean barEnabled;
+    private double barRange;
+    private double barFacingWeight;
+
     // Click sound
     private boolean soundEnabled;
     private String soundName;
@@ -94,8 +104,10 @@ public class GeigerConfiguration {
     public void load() {
         loadWorld();
         loadSearchArea();
+        loadSourceDistances();
         loadSpawnFilters();
         loadDetectionSettings();
+        loadBarSettings();
         loadDropLimits();
         loadSoundSettings();
         loadColorSettings();
@@ -128,6 +140,26 @@ public class GeigerConfiguration {
     }
     
     // ====================================
+    // How far from the character a source is placed, and when it is placed again
+    // ====================================
+    private void loadSourceDistances() {
+        minSourceDistance = Math.max(0.0, plugin.getConfig().getDouble("source.min-distance", 150.0));
+        maxSourceDistance = plugin.getConfig().getDouble("source.max-distance", 500.0);
+        rerollDistance = plugin.getConfig().getDouble("source.reroll-distance", 1000.0);
+
+        if (maxSourceDistance < minSourceDistance) {
+            plugin.getLogger().warning("source.max-distance is below source.min-distance - using min-distance for both.");
+            maxSourceDistance = minSourceDistance;
+        }
+
+        // Below max-distance a fresh source could be placed out of range and re-rolled forever
+        if (rerollDistance < maxSourceDistance) {
+            plugin.getLogger().warning("source.reroll-distance is below source.max-distance - using max-distance.");
+            rerollDistance = maxSourceDistance;
+        }
+    }
+
+    // ====================================
     // Load the rules that decide where the source is allowed to spawn
     // ====================================
     private void loadSpawnFilters() {
@@ -158,12 +190,26 @@ public class GeigerConfiguration {
 
     private void loadDetectionSettings() {
         collectionDistance = plugin.getConfig().getDouble("detection.collection-distance", 20.0);
-        maxDetectionDistance = plugin.getConfig().getDouble("detection.max-detection-distance", 2500.0);
+        maxDetectionDistance = plugin.getConfig().getDouble("detection.max-detection-distance", 1000.0);
         closeRangeThreshold = plugin.getConfig().getDouble("detection.close-range-threshold", 200.0);
         threeRingsDistance = plugin.getConfig().getDouble("detection.ring-thresholds.three-rings", 100.0);
         twoRingsDistance = plugin.getConfig().getDouble("detection.ring-thresholds.two-rings", 300.0);
     }
     
+    // ====================================
+    // Boss bar that fills with closeness and facing
+    // ====================================
+    private void loadBarSettings() {
+        barEnabled = plugin.getConfig().getBoolean("bar.enabled", true);
+        barRange = plugin.getConfig().getDouble("bar.range", 750.0);
+        barFacingWeight = Math.min(1.0, Math.max(0.0, plugin.getConfig().getDouble("bar.facing-weight", 0.6)));
+
+        if (barRange <= 0.0) {
+            plugin.getLogger().warning("bar.range must be greater than 0 - falling back to 750.");
+            barRange = 750.0;
+        }
+    }
+
     // ====================================
     // Geiger clicking sound
     // ====================================
@@ -371,6 +417,9 @@ public class GeigerConfiguration {
     public double getMaxX() { return maxX; }
     public double getMinZ() { return minZ; }
     public double getMaxZ() { return maxZ; }
+    public double getMinSourceDistance() { return minSourceDistance; }
+    public double getMaxSourceDistance() { return maxSourceDistance; }
+    public double getRerollDistance() { return rerollDistance; }
     public SpawnFilterConfig getSpawnFilters() { return spawnFilters; }
     public double getCollectionDistance() { return collectionDistance; }
     public double getMaxDetectionDistance() { return maxDetectionDistance; }
@@ -378,6 +427,9 @@ public class GeigerConfiguration {
     public double getThreeRingsDistance() { return threeRingsDistance; }
     public double getTwoRingsDistance() { return twoRingsDistance; }
     public Messages getMessages() { return messages; }
+    public boolean isBarEnabled() { return barEnabled; }
+    public double getBarRange() { return barRange; }
+    public double getBarFacingWeight() { return barFacingWeight; }
     public boolean isSoundEnabled() { return soundEnabled; }
     public String getSoundName() { return soundName; }
     public double getSoundVolume() { return soundVolume; }

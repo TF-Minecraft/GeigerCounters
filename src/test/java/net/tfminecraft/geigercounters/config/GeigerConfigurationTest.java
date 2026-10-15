@@ -52,7 +52,13 @@ class GeigerConfigurationTest {
     load();
     assertSame(world, configuration.getWorld());
     assertEquals(20, configuration.getCollectionDistance());
-    assertEquals(2500, configuration.getMaxDetectionDistance());
+    assertEquals(1000, configuration.getMaxDetectionDistance());
+    assertEquals(150, configuration.getMinSourceDistance());
+    assertEquals(500, configuration.getMaxSourceDistance());
+    assertEquals(1000, configuration.getRerollDistance());
+    assertTrue(configuration.isBarEnabled());
+    assertEquals(750, configuration.getBarRange());
+    assertEquals(0.6, configuration.getBarFacingWeight());
     assertEquals(200, configuration.getCloseRangeThreshold());
     assertEquals(100, configuration.getThreeRingsDistance());
     assertEquals(300, configuration.getTwoRingsDistance());
@@ -112,6 +118,34 @@ class GeigerConfigurationTest {
     assertEquals(0, configuration.getSoundPitchVariance());
     assertFalse(configuration.isLimitEnabled());
     assertEquals(TimeUnit.HOURS.toMillis(12), configuration.getLimitWindowMillis());
+  }
+
+  @Test
+  void sourceDistancesAndBarSettingsAreKeptConsistent() {
+    yaml.set("source.min-distance", -5);
+    yaml.set("source.max-distance", -10);
+    yaml.set("source.reroll-distance", -20);
+    yaml.set("bar.enabled", false);
+    yaml.set("bar.range", 0);
+    yaml.set("bar.facing-weight", 3);
+    load();
+    assertEquals(0, configuration.getMinSourceDistance());
+    assertEquals(0, configuration.getMaxSourceDistance());
+    assertEquals(0, configuration.getRerollDistance());
+    assertFalse(configuration.isBarEnabled());
+    assertEquals(750, configuration.getBarRange());
+    assertEquals(1, configuration.getBarFacingWeight());
+    yaml.set("source.min-distance", 100);
+    yaml.set("source.max-distance", 300);
+    yaml.set("source.reroll-distance", 600);
+    yaml.set("bar.range", 400);
+    yaml.set("bar.facing-weight", -1);
+    load();
+    assertEquals(100, configuration.getMinSourceDistance());
+    assertEquals(300, configuration.getMaxSourceDistance());
+    assertEquals(600, configuration.getRerollDistance());
+    assertEquals(400, configuration.getBarRange());
+    assertEquals(0, configuration.getBarFacingWeight());
   }
 
   @Test

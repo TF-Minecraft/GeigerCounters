@@ -22,7 +22,7 @@ class ConfigMigratorTest {
   JavaPlugin plugin;
   YamlConfiguration live;
   ConfigMigrator migrator;
-  String packagedConfig = "config-version: 5\nsource:\n  world: world\n";
+  String packagedConfig = "config-version: 6\nsource:\n  world: world\n";
   String packagedMessages = "player:\n  found-source: shipped\nadmin:\n  help: help\n";
 
   @BeforeEach
@@ -75,7 +75,7 @@ class ConfigMigratorTest {
   void upgradePreservesValuesUnknownKeysAndCommentsAndCreatesExactBackup() throws Exception {
     packagedConfig =
         "# Version\n"
-            + "config-version: 5 # version-inline\n"
+            + "config-version: 6 # version-inline\n"
             + "# World section\n"
             + "source:\n"
             + "  # Server world\n"
@@ -91,7 +91,7 @@ class ConfigMigratorTest {
     String previous = Files.readString(directory.resolve("config.yml"));
     migrator.migrate();
     assertEquals(previous, Files.readString(directory.resolve("config-v1.yml.bak")));
-    assertEquals(5, live.getInt("config-version"));
+    assertEquals(6, live.getInt("config-version"));
     assertEquals("custom", live.getString("source.world"));
     assertEquals(List.of("custom-item"), live.getStringList("list"));
     assertEquals(42, live.getInt("retired-setting"));
@@ -114,6 +114,29 @@ class ConfigMigratorTest {
     clearInvocations(plugin);
     migrator.migrate();
     verify(plugin, never()).saveConfig();
+  }
+
+  @Test
+  void upgradeToCharacterSourcesCapsDetectionRangeAtRerollDistanceOnce() throws Exception {
+    packagedConfig = "config-version: 6\nsource:\n  reroll-distance: 1000.0\n";
+    live.set("config-version", 5);
+    live.set("detection.max-detection-distance", 2500.0);
+    saveLive();
+    migrator.migrate();
+    assertEquals(1000.0, live.getDouble("detection.max-detection-distance"));
+    live.set("detection.max-detection-distance", 2500.0);
+    migrator.migrate();
+    assertEquals(2500.0, live.getDouble("detection.max-detection-distance"));
+  }
+
+  @Test
+  void upgradeKeepsADetectionRangeAlreadyWithinRerollDistance() throws Exception {
+    packagedConfig = "config-version: 6\nsource:\n  reroll-distance: 1000.0\n";
+    live.set("config-version", 5);
+    live.set("detection.max-detection-distance", 800.0);
+    saveLive();
+    migrator.migrate();
+    assertEquals(800.0, live.getDouble("detection.max-detection-distance"));
   }
 
   @Test
@@ -229,7 +252,7 @@ class ConfigMigratorTest {
     Files.writeString(
         directory.resolve("config-v1.yml.bak/occupied"), "prevent replacing directory");
     assertDoesNotThrow(migrator::migrate);
-    assertEquals(5, live.getInt("config-version"));
+    assertEquals(6, live.getInt("config-version"));
     verify(plugin).saveConfig();
   }
 
@@ -258,6 +281,6 @@ class ConfigMigratorTest {
     saveLive();
     migrator.migrate();
     assertFalse(live.contains("empty"));
-    assertEquals(5, live.getInt("config-version"));
+    assertEquals(6, live.getInt("config-version"));
   }
 }

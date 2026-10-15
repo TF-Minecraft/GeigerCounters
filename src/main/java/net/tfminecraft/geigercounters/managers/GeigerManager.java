@@ -4,15 +4,23 @@ import net.tfminecraft.tlibs.objects.api.ItemAPI;
 import net.tfminecraft.tlibs.TLibs;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.plugin.java.JavaPlugin;
 import net.tfminecraft.geigercounters.config.GeigerConfiguration;
 import net.tfminecraft.geigercounters.handlers.GeigerClickPlayer;
 import net.tfminecraft.geigercounters.handlers.ParticleRenderer;
+import net.tfminecraft.geigercounters.handlers.SignalBar;
 import net.tfminecraft.geigercounters.handlers.SourceHandler;
 import net.tfminecraft.geigercounters.validators.GeigerValidator;
+import net.tfminecraft.geigercounters.utils.Hunters;
 import net.tfminecraft.geigercounters.validators.SpawnLocationFilter;
+
+import java.util.HashSet;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 
 // ====================================
 // Main manager for the Geiger Counter system
@@ -31,6 +39,7 @@ public class GeigerManager {
     private SpawnLocationFilter spawnFilter;
     private ParticleRenderer particleRenderer;
     private GeigerClickPlayer clickPlayer;
+    private SignalBar signalBar;
     private SourceHandler sourceHandler;
     private DropLimitManager dropLimitManager;
     private ItemAPI api;
@@ -66,6 +75,8 @@ public class GeigerManager {
         particleRenderer = new ParticleRenderer(configuration);
 
         clickPlayer = new GeigerClickPlayer(configuration);
+
+        signalBar = new SignalBar(configuration);
         
         spawnFilter = new SpawnLocationFilter(plugin, configuration);
 
@@ -73,9 +84,7 @@ public class GeigerManager {
         dropLimitManager.load();
 
         sourceHandler = new SourceHandler(plugin, configuration, api, spawnFilter, dropLimitManager);
-        
-        // Spawn initial source
-        sourceHandler.moveSourceToRandomLocation();
+        sourceHandler.load();
         
         // Start player checking task
         startPlayerCheckTask();
@@ -95,14 +104,20 @@ public class GeigerManager {
     }
 
     // ====================================
-    // Flush per-player drop limits to disk on shutdown
+    // Flush drop limits and sources to disk on shutdown
     // ====================================
     public void shutdown() {
         if (clickPlayer != null) {
             clickPlayer.clear();
         }
+        if (signalBar != null) {
+            signalBar.clear();
+        }
         if (dropLimitManager != null) {
             dropLimitManager.save();
+        }
+        if (sourceHandler != null) {
+            sourceHandler.save();
         }
     }
 
@@ -137,25 +152,28 @@ public class GeigerManager {
     // ===== PLAYER CHECKING =====
     
     // ====================================
-    // Check all online players to see if they're holding a Geiger Counter
+    // Check every online player in the source world holding a Geiger Counter
     // in either hand
     // ====================================
     private void checkAllPlayers() {
+        World world = configuration.getWorld();
+        Set<UUID> hunting = new HashSet<>();
+
         for (Player player : Bukkit.getOnlinePlayers()) {
-            // A preceding player can collect and relocate the source immediately.
-            Location source = sourceHandler.getSourceLocation();
-            if (source == null) {
-                return;
-            }
-            if (!player.getLocation().getWorld().equals(source.getWorld())) {
+            if (world == null || !world.equals(player.getWorld())) {
                 continue;
             }
             EquipmentSlot geigerSlot = findGeigerSlot(player);
-
-            if (geigerSlot != null) {
-                handlePlayerWithGeiger(player, source, geigerSlot);
+            if (geigerSlot == null) {
+                continue;
+            }
+            Optional<UUID> hunter = Hunters.of(player);
+            if (hunter.isPresent() && handlePlayerWithGeiger(player, hunter.get(), geigerSlot)) {
+                hunting.add(player.getUniqueId());
             }
         }
+
+        signalBar.retain(hunting);
     }
 
     // Returns the hand holding a Geiger Counter, or null if neither
@@ -169,11 +187,30 @@ public class GeigerManager {
         return null;
     }
 
-    private void handlePlayerWithGeiger(Player player, Location source, EquipmentSlot geigerSlot) {
+    // ====================================
+    // Returns whether the player has a source to read. One is placed near
+    // them when they have none, or have strayed beyond reroll-distance.
+    // ====================================
+    private boolean handlePlayerWithGeiger(Player player, UUID hunter, EquipmentSlot geigerSlot) {
+        Location source = sourceHandler.getSource(hunter);
+        if (source == null) {
+            if (!sourceHandler.isPlacing(hunter)) {
+                sourceHandler.placeNear(hunter, player.getLocation());
+            }
+            return false;
+        }
+
         double distance = calculateHorizontalDistance(player.getLocation(), source);
+        if (!player.getWorld().equals(source.getWorld()) || distance > configuration.getRerollDistance()) {
+            sourceHandler.placeNear(hunter, player.getLocation());
+            return false;
+        }
+
         particleRenderer.showParticleEffect(player, distance);
         clickPlayer.updateRate(player, distance);
-        sourceHandler.tryCollectSource(player, distance, geigerSlot);
+        signalBar.update(player, source, distance);
+        sourceHandler.tryCollectSource(player, hunter, distance, geigerSlot);
+        return true;
     }
     
     // ===== DISTANCE CALCULATION =====

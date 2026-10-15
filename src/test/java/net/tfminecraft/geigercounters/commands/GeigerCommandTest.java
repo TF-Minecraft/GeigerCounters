@@ -6,11 +6,13 @@ import static org.mockito.Mockito.*;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import net.tfminecraft.geigercounters.config.*;
 import net.tfminecraft.geigercounters.handlers.SourceHandler;
 import net.tfminecraft.geigercounters.managers.*;
+import net.tfminecraft.geigercounters.utils.Hunters;
 import org.bukkit.*;
 import org.bukkit.command.*;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -83,52 +85,96 @@ class GeigerCommandTest {
     verify(sender).sendMessage("admin.reloaded");
   }
 
-  @Test
-  void locateReportsRelocationOrCurrentCoordinates() {
-    run("locate");
-    verify(sender).sendMessage("admin.source-relocating");
-    when(source.getSourceLocation()).thenReturn(new Location(world, -0.5, 72, 43.2));
-    run("locate");
-    verify(sender).sendMessage("admin.source-located");
+  Player online(String name) {
+    Player target = mock(Player.class);
+    when(target.getName()).thenReturn(name);
+    when(target.getLocation()).thenReturn(new Location(world, 1, 64, 2));
+    return target;
+  }
+
+  // Runs with Hunter online as <target> playing <hunter>
+  void runAs(Player target, Optional<UUID> hunter, String... args) {
+    try (var bukkit = mockStatic(Bukkit.class);
+        var hunters = mockStatic(Hunters.class)) {
+      bukkit.when(() -> Bukkit.getPlayerExact("Hunter")).thenReturn(target);
+      hunters.when(() -> Hunters.of(target)).thenReturn(hunter);
+      run(args);
+    }
   }
 
   @Test
-  void randomMovementReportsSearchingThenSuccessOrFailureOnCompletion() {
+  void locateValidatesUsageOnlineTargetAndCharacter() {
+    run("locate");
+    run("locate", "a", "b");
+    verify(sender, times(2)).sendMessage("admin.locate-usage");
+    runAs(null, Optional.empty(), "locate", "Hunter");
+    verify(sender).sendMessage("admin.player-offline");
+    runAs(online("Hunter"), Optional.empty(), "locate", "Hunter");
+    verify(sender).sendMessage("admin.no-character");
+    verifyNoInteractions(source);
+  }
+
+  @Test
+  void locateReportsPlacingMissingOrCurrentSourceIncludingOwn() {
+    UUID hunter = UUID.randomUUID();
+    Player target = online("Hunter");
+    when(source.isPlacing(hunter)).thenReturn(true, false);
+    runAs(target, Optional.of(hunter), "locate", "Hunter");
+    verify(sender).sendMessage("admin.source-relocating");
+    runAs(target, Optional.of(hunter), "locate", "Hunter");
+    verify(sender).sendMessage("admin.no-source");
+    when(source.getSource(hunter)).thenReturn(new Location(world, -0.5, 72, 43.2));
+    try (var hunters = mockStatic(Hunters.class)) {
+      hunters.when(() -> Hunters.of(target)).thenReturn(Optional.of(hunter));
+      assertTrue(command.onCommand(target, mock(Command.class), "geiger", new String[] {"locate"}));
+    }
+    verify(target).sendMessage("admin.source-located");
+  }
+
+  @Test
+  void moveWithoutCoordinatesClearsTheSource() {
+    UUID hunter = UUID.randomUUID();
+    runAs(online("Hunter"), Optional.of(hunter), "move", "Hunter");
+    verify(source).clear(hunter);
+    verify(sender).sendMessage("admin.move-cleared");
+  }
+
+  @Test
+  void moveToCoordinatesReportsSuccessOrFailureOnCompletion() {
+    UUID hunter = UUID.randomUUID();
     CompletableFuture<Location> pending = new CompletableFuture<>();
-    when(source.moveSourceToRandomLocation()).thenReturn(pending);
-    run("move");
-    verify(sender).sendMessage("admin.move-searching");
+    when(source.placeAt(hunter, -0.5, 12.25)).thenReturn(pending);
+    runAs(online("Hunter"), Optional.of(hunter), "move", "Hunter", "-0.5", "12.25");
     verify(sender, never()).sendMessage("admin.move-success");
-    pending.complete(new Location(world, 12.3, 70, 42));
+    pending.complete(new Location(world, -0.5, 70, 12.25));
     verify(sender).sendMessage("admin.move-success");
-    when(source.moveSourceToRandomLocation()).thenReturn(CompletableFuture.completedFuture(null));
-    run("move");
+    when(source.placeAt(hunter, 1, 2)).thenReturn(CompletableFuture.completedFuture(null));
+    runAs(online("Hunter"), Optional.of(hunter), "move", "Hunter", "1", "2");
     verify(sender).sendMessage("admin.move-failed");
   }
 
   @Test
-  void movementValidatesArityAndNumbersAndAcceptsFiniteDecimals() {
-    run("move", "1");
-    run("move", "bad", "1");
-    run("move", "1", "bad");
-    verify(sender).sendMessage("admin.move-usage");
+  void moveValidatesArityNumbersAndTarget() {
+    run("move");
+    run("move", "Hunter", "1");
+    run("move", "Hunter", "bad", "1");
+    run("move", "Hunter", "1", "bad");
+    verify(sender, times(2)).sendMessage("admin.move-usage");
     verify(sender, times(2)).sendMessage("admin.move-invalid-coords");
-    when(source.moveSourceToLocation(-0.5, 12.25))
-        .thenReturn(CompletableFuture.completedFuture(new Location(world, -0.5, 70, 12.25)));
-    run("move", "-0.5", "12.25");
-    verify(source).moveSourceToLocation(-0.5, 12.25);
-    verify(sender).sendMessage("admin.move-success");
+    runAs(null, Optional.empty(), "move", "Hunter");
+    verify(sender).sendMessage("admin.player-offline");
+    runAs(online("Hunter"), Optional.empty(), "move", "Hunter", "1", "2");
+    verify(sender).sendMessage("admin.no-character");
+    verifyNoInteractions(source);
   }
 
   @Test
-  void movementRejectsNonFiniteCoordinatesWithoutLoadingChunks() {
-    when(source.moveSourceToLocation(anyDouble(), anyDouble()))
-        .thenReturn(CompletableFuture.completedFuture(null));
+  void moveRejectsNonFiniteCoordinatesWithoutLoadingChunks() {
     for (String invalid : List.of("NaN", "Infinity", "-Infinity", "1e999")) {
-      run("move", invalid, "1");
-      run("move", "1", invalid);
+      run("move", "Hunter", invalid, "1");
+      run("move", "Hunter", "1", invalid);
     }
-    verify(source, never()).moveSourceToLocation(anyDouble(), anyDouble());
+    verifyNoInteractions(source);
     verify(sender, times(8)).sendMessage("admin.move-invalid-coords");
   }
 
@@ -197,7 +243,7 @@ class GeigerCommandTest {
     assertEquals(6, complete(sender, "").size());
     assertEquals(List.of("Hunt"), complete(sender, "droplist", "h"));
     assertTrue(complete(sender, "unknown", "").isEmpty());
-    assertTrue(complete(sender, "move", "1", "2", "").isEmpty());
+    assertTrue(complete(sender, "move", "Hunter", "1", "2", "").isEmpty());
     assertTrue(complete(sender, "droplist", "Hunt", "").isEmpty());
   }
 
@@ -209,20 +255,20 @@ class GeigerCommandTest {
     when(config.getMaxZ()).thenReturn(40.2);
     Player actor = mock(Player.class);
     when(actor.getLocation()).thenReturn(new Location(world, -0.5, 64, 30.9));
-    assertEquals(List.of("-1", "10"), complete(actor, "move", ""));
-    assertEquals(List.of("30", "-21", "40"), complete(actor, "move", "0", ""));
-    assertEquals(List.of("-21"), complete(sender, "move", "0", "-"));
-    assertEquals(List.of("10"), complete(sender, "move", "1"));
+    assertEquals(List.of("-1", "10"), complete(actor, "move", "Hunter", ""));
+    assertEquals(List.of("30", "-21", "40"), complete(actor, "move", "Hunter", "0", ""));
+    assertEquals(List.of("-21"), complete(sender, "move", "Hunter", "0", "-"));
+    assertEquals(List.of("10"), complete(sender, "move", "Hunter", "1"));
   }
 
   @Test
-  void allLimitAliasesCompleteOnlinePlayerNamesCaseInsensitively() {
+  void playerArgumentsCompleteOnlinePlayerNamesCaseInsensitively() {
     Player first = mock(Player.class), second = mock(Player.class);
     when(first.getName()).thenReturn("Hunter");
     when(second.getName()).thenReturn("Other");
     try (var bukkit = mockStatic(Bukkit.class)) {
       bukkit.when(Bukkit::getOnlinePlayers).thenReturn(List.of(first, second));
-      for (String alias : List.of("limit", "limits", "resetlimit", "resetlimits")) {
+      for (String alias : List.of("locate", "move", "limit", "limits", "resetlimit", "resetlimits")) {
         assertEquals(List.of("Hunter"), complete(sender, alias, "HU"));
       }
     }

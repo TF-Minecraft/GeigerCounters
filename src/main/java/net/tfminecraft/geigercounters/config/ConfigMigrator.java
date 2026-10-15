@@ -36,7 +36,8 @@ public class ConfigMigrator {
     // v3: messages moved out to messages.yml
     // v4: messages.yml split into player/admin sections
     // v5: drops.tiers -> drops.lists.<name>.tiers, selected by drops.active-list
-    public static final int CURRENT_VERSION = 5;
+    // v6: a source per character - source distances, bar section, detection range capped
+    public static final int CURRENT_VERSION = 6;
 
     public static final String MESSAGES_FILE = "messages.yml";
 
@@ -83,6 +84,9 @@ public class ConfigMigrator {
         boolean movedDropList = migrateDropLists(live);
 
         List<String> addedKeys = copyMissingKeys(packaged, live);
+        if (liveVersion < 6) {
+            capDetectionRange(live);
+        }
         boolean versionChanged = liveVersion != CURRENT_VERSION;
 
         if (addedKeys.isEmpty() && !versionChanged && !movedDropList) {
@@ -215,6 +219,23 @@ public class ConfigMigrator {
 
         plugin.getLogger().info("Moved drops.tiers to drops.lists.default and set drops.active-list to 'default'.");
         return true;
+    }
+
+    // ====================================
+    // A detection range sized for one source anywhere on the map makes the
+    // clicks and rings read "close" for most of a nearby hunt. Sources now sit
+    // within reroll-distance, so the range is capped at that once.
+    // ====================================
+    private void capDetectionRange(FileConfiguration live) {
+        double reroll = live.getDouble("source.reroll-distance");
+        double detection = live.getDouble("detection.max-detection-distance");
+        if (detection <= reroll) {
+            return;
+        }
+
+        live.set("detection.max-detection-distance", reroll);
+        plugin.getLogger().info("Lowered detection.max-detection-distance from " + detection + " to " + reroll
+            + " to match source.reroll-distance.");
     }
 
     // ====================================

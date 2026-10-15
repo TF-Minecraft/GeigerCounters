@@ -49,8 +49,8 @@ public class BuriedChest implements Listener {
     // What the hunt does when the hunter reaches their cache
     // ====================================
     public interface Actions {
-        // The hunter clicked their cache
-        void open(Player player);
+        // The hunter clicked the chest at <block>
+        void open(Player player, Location block);
 
         // Something stopped the hunter digging next to their cache
         void groundProtected(Player player);
@@ -105,6 +105,16 @@ public class BuriedChest implements Listener {
         retain(Set.of());
     }
 
+    // ====================================
+    // Put the real block back for this player now, when their cache moves
+    // ====================================
+    public void hide(Player player) {
+        Shown current = shown.remove(player.getUniqueId());
+        if (current != null) {
+            revert(player, current.block);
+        }
+    }
+
     // Clicking the chest opens it. Cancelled first so nothing else acts on the
     // real block underneath, and a left click never starts breaking it.
     @EventHandler(priority = EventPriority.LOWEST)
@@ -114,7 +124,7 @@ public class BuriedChest implements Listener {
             return;
         }
         event.setCancelled(true);
-        actions.open(event.getPlayer());
+        actions.open(event.getPlayer(), clicked.getLocation());
     }
 
     // Breaking the cache block outright (creative mode) would dig up the real

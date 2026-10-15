@@ -148,7 +148,22 @@ class BuriedChestTest {
     when(event.getClickedBlock()).thenReturn(at3);
     chest.onInteract(event);
     verify(event).setCancelled(true);
-    verify(actions).open(player);
+    verify(actions).open(player, block);
+  }
+
+  @Test
+  void hidingPutsTheRealBlockBackAtOnce() {
+    chest.hide(player);
+    verify(player, never()).sendBlockChange(any(Location.class), any(BlockData.class));
+    chest.show(player, cache);
+    chest.hide(player);
+    verify(player).sendBlockChange(block, stone);
+    PlayerInteractEvent event = mock(PlayerInteractEvent.class);
+    when(event.getPlayer()).thenReturn(player);
+    Block clicked = blockAt(block);
+    when(event.getClickedBlock()).thenReturn(clicked);
+    chest.onInteract(event);
+    verifyNoInteractions(actions);
   }
 
   @Test

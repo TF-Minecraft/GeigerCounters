@@ -21,7 +21,7 @@ import java.util.List;
 //
 // The window is not backed by any block, so whatever is still in it when it
 // closes (or the server stops) goes to the player, never lost. A player who
-// dies with it open drops it with the rest of their things.
+// dies with it open loses it with the rest of their things, grave included.
 // ====================================
 public class CacheMenu implements Listener {
 
@@ -68,7 +68,10 @@ public class CacheMenu implements Listener {
 
     // The window is still open when the death drops are gathered, and closing
     // it afterwards would return its contents to an inventory about to be
-    // cleared. Lowest priority so graves and the like collect them too.
+    // cleared. Lowest priority, so they are in place before anything else acts:
+    // put in the inventory for graves (RPCharacters snapshots it, then clears
+    // the drops) and kept inventories, and in the drops for a plain death.
+    // Whatever does not fit falls where the player died.
     @EventHandler(priority = EventPriority.LOWEST)
     public void onDeath(PlayerDeathEvent event) {
         Player player = event.getEntity();
@@ -76,11 +79,19 @@ public class CacheMenu implements Listener {
         if (!(top.getHolder() instanceof Holder)) {
             return;
         }
-        if (event.getKeepInventory()) {
-            empty(player, top);
-            return;
+        for (ItemStack item : take(top)) {
+            int amount = item.getAmount();
+            ItemStack copy = item.clone();
+            int left = 0;
+            for (ItemStack leftover : player.getInventory().addItem(item).values()) {
+                left += leftover.getAmount();
+                player.getWorld().dropItemNaturally(player.getLocation(), leftover);
+            }
+            if (!event.getKeepInventory() && left < amount) {
+                copy.setAmount(amount - left);
+                event.getDrops().add(copy);
+            }
         }
-        event.getDrops().addAll(take(top));
     }
 
     // ====================================

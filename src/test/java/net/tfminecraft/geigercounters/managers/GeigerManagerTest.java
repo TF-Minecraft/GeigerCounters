@@ -195,21 +195,32 @@ class GeigerManagerTest {
     verify(chest).show(p, at);
   }
 
-  void open(Optional<UUID> hunterId, Player p) {
+  // The cache centre and the block clicked to open it
+  Location cache = new Location(world, 40.5, 60.5, -9.5);
+  Location block = new Location(world, 40, 60, -10);
+
+  void open(Optional<UUID> hunterId, Player p, Location clicked) {
     try (var h = mockStatic(Hunters.class)) {
       h.when(() -> Hunters.of(p)).thenReturn(hunterId);
-      manager.open(p);
+      manager.open(p, clicked);
     }
   }
 
   @Test
-  void openingNeedsACharacterAndADetectorInHand() {
-    open(Optional.empty(), player(world, true, false));
-    open(Optional.of(hunter), player(world, false, false));
-    verifyNoInteractions(source);
+  void openingNeedsACharacterADetectorInHandAndTheirCurrentCache() {
+    cache.setWorld(world);
+    block.setWorld(world);
+    open(Optional.empty(), player(world, true, false), block);
+    open(Optional.of(hunter), player(world, false, false), block);
+    verify(source, never()).open(any(), any(), any());
     Player main = player(world, true, true), off = player(world, false, true);
-    open(Optional.of(hunter), main);
-    open(Optional.of(hunter), off);
+    // No cache, or a chest left over from before it moved
+    open(Optional.of(hunter), main, block);
+    when(source.getSource(hunter)).thenReturn(cache);
+    open(Optional.of(hunter), main, new Location(world, 40, 61, -10));
+    verify(source, never()).open(any(), any(), any());
+    open(Optional.of(hunter), main, block);
+    open(Optional.of(hunter), off, block);
     verify(source).open(main, hunter, EquipmentSlot.HAND);
     verify(source).open(off, hunter, EquipmentSlot.OFF_HAND);
   }
@@ -227,6 +238,7 @@ class GeigerManagerTest {
       manager.groundProtected(p);
     }
     verify(p).sendMessage("warded");
+    verify(chest).hide(p);
     verify(source).placeNear(hunter, p.getLocation());
   }
 

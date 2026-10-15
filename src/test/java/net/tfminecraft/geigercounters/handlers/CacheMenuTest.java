@@ -6,11 +6,14 @@ import static org.mockito.Mockito.*;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import net.tfminecraft.geigercounters.config.GeigerConfiguration;
 import net.tfminecraft.geigercounters.config.Messages;
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.entity.HumanEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.entity.PlayerDeathEvent;
@@ -154,23 +157,56 @@ class CacheMenuTest {
     return event;
   }
 
+  // A stack of <amount> whose clone is <copy>
+  ItemStack stack(int amount, ItemStack copy) {
+    ItemStack item = item(false);
+    when(item.getAmount()).thenReturn(amount);
+    when(item.clone()).thenReturn(copy);
+    return item;
+  }
+
   @Test
-  void dyingWithTheCacheOpenDropsWhatIsInIt() {
+  void dyingWithTheCacheOpenPutsItInTheInventoryForGravesAndInTheDrops() {
     InventoryHolder holder = open(null);
-    ItemStack left = item(false);
+    ItemStack copy = mock(ItemStack.class), left = stack(5, copy);
     when(window.getHolder()).thenReturn(holder);
     when(window.getContents()).thenReturn(new ItemStack[] {left});
     List<ItemStack> drops = new ArrayList<>();
     menu.onDeath(death(window, false, drops));
-    assertEquals(List.of(left), drops);
+    verify(pockets).addItem(left);
+    verify(copy).setAmount(5);
+    assertEquals(List.of(copy), drops);
     verify(window).clear();
-    verify(pockets, never()).addItem(any(ItemStack.class));
   }
 
   @Test
-  void keptInventoriesKeepTheCacheContentsToo() {
+  void whatDoesNotFitFallsWhereThePlayerDied() {
+    World world = mock(World.class);
+    Location at = new Location(world, 1, 2, 3);
+    when(player.getWorld()).thenReturn(world);
+    when(player.getLocation()).thenReturn(at);
     InventoryHolder holder = open(null);
-    ItemStack left = item(false);
+    ItemStack partCopy = mock(ItemStack.class), part = stack(10, partCopy);
+    ItemStack noneCopy = mock(ItemStack.class), none = stack(4, noneCopy);
+    ItemStack partLeft = mock(ItemStack.class), noneLeft = mock(ItemStack.class);
+    when(partLeft.getAmount()).thenReturn(3);
+    when(noneLeft.getAmount()).thenReturn(4);
+    when(pockets.addItem(part)).thenReturn(new HashMap<>(Map.of(0, partLeft)));
+    when(pockets.addItem(none)).thenReturn(new HashMap<>(Map.of(0, noneLeft)));
+    when(window.getHolder()).thenReturn(holder);
+    when(window.getContents()).thenReturn(new ItemStack[] {part, none});
+    List<ItemStack> drops = new ArrayList<>();
+    menu.onDeath(death(window, false, drops));
+    verify(world).dropItemNaturally(at, partLeft);
+    verify(world).dropItemNaturally(at, noneLeft);
+    verify(partCopy).setAmount(7);
+    assertEquals(List.of(partCopy), drops);
+  }
+
+  @Test
+  void keptInventoriesKeepTheCacheContentsWithoutDropping() {
+    InventoryHolder holder = open(null);
+    ItemStack copy = mock(ItemStack.class), left = stack(2, copy);
     when(window.getHolder()).thenReturn(holder);
     when(window.getContents()).thenReturn(new ItemStack[] {left});
     List<ItemStack> drops = new ArrayList<>();

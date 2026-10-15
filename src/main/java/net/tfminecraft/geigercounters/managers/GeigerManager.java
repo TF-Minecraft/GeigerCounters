@@ -245,13 +245,19 @@ public class GeigerManager implements BuriedChest.Actions {
     }
 
     // ====================================
-    // The hunter clicked their cache, which only shows while they hold a detector
+    // The hunter clicked a chest, which only shows while they hold a detector.
+    // It must still be their current character's cache; one shown before a
+    // move or a character switch opens nothing.
     // ====================================
     @Override
-    public void open(Player player) {
+    public void open(Player player, Location block) {
         Optional<UUID> hunter = Hunters.of(player);
         EquipmentSlot geigerSlot = findGeigerSlot(player);
         if (hunter.isEmpty() || geigerSlot == null) {
+            return;
+        }
+        Location source = sourceHandler.getSource(hunter.get());
+        if (source == null || !source.toBlockLocation().equals(block)) {
             return;
         }
         sourceHandler.open(player, hunter.get(), geigerSlot);
@@ -267,6 +273,7 @@ public class GeigerManager implements BuriedChest.Actions {
             return;
         }
         player.sendMessage(configuration.getMessages().get("player.cache-protected"));
+        buriedChest.hide(player);
         sourceHandler.placeNear(hunter.get(), player.getLocation());
     }
     

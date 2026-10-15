@@ -76,7 +76,9 @@ public class CacheMenu implements Listener {
     // Only empty slots are used. Paper's drops are the inventory's own stacks,
     // so merging into one would grow its drop too, and the drop entries
     // themselves are left alone so Paper spawns them as usual. Whatever has no
-    // free slot falls where the player died.
+    // free slot falls where the player died. Known limit: with no grave, an
+    // added drop that another plugin refuses to spawn (WorldGuard item-drop
+    // deny) is lost; no TFMC region sets that flag.
     @EventHandler(priority = EventPriority.LOWEST)
     public void onDeath(PlayerDeathEvent event) {
         Player player = event.getEntity();

@@ -11,6 +11,7 @@ import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.PlayerInventory;
 import net.tfminecraft.geigercounters.config.GeigerConfiguration;
 
 import java.util.ArrayList;
@@ -71,7 +72,11 @@ public class CacheMenu implements Listener {
     // cleared. Lowest priority, so they are in place before anything else acts:
     // put in the inventory for graves (RPCharacters snapshots it, then clears
     // the drops) and kept inventories, and in the drops for a plain death.
-    // Whatever does not fit falls where the player died.
+    //
+    // Only empty slots are used. Paper's drops are the inventory's own stacks,
+    // so merging into one would grow its drop too, and the drop entries
+    // themselves are left alone so Paper spawns them as usual. Whatever has no
+    // free slot falls where the player died.
     @EventHandler(priority = EventPriority.LOWEST)
     public void onDeath(PlayerDeathEvent event) {
         Player player = event.getEntity();
@@ -79,20 +84,22 @@ public class CacheMenu implements Listener {
         if (!(top.getHolder() instanceof Holder)) {
             return;
         }
-        // Paper's drops are the inventory's own stacks; copy them first, or
-        // loot merged into a stack would also grow the drop of that stack
-        event.getDrops().replaceAll(drop -> drop == null ? null : drop.clone());
+        PlayerInventory inventory = player.getInventory();
+        ItemStack[] storage = inventory.getStorageContents();
+        int slot = 0;
         for (ItemStack item : take(top)) {
-            int amount = item.getAmount();
-            ItemStack copy = item.clone();
-            int left = 0;
-            for (ItemStack leftover : player.getInventory().addItem(item).values()) {
-                left += leftover.getAmount();
-                player.getWorld().dropItemNaturally(player.getLocation(), leftover);
+            while (slot < storage.length && storage[slot] != null && !storage[slot].isEmpty()) {
+                slot++;
             }
-            if (!event.getKeepInventory() && left < amount) {
-                copy.setAmount(amount - left);
-                event.getDrops().add(copy);
+            if (slot == storage.length) {
+                player.getWorld().dropItemNaturally(player.getLocation(), item);
+                continue;
+            }
+            // Storage contents are slots 0-35, in order
+            inventory.setItem(slot, item);
+            storage[slot] = item;
+            if (!event.getKeepInventory()) {
+                event.getDrops().add(item.clone());
             }
         }
     }

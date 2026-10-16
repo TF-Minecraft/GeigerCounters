@@ -1,16 +1,21 @@
 # Config version - do not edit.
 # The plugin uses it to add newly introduced keys on upgrade; your own values
 # are kept, and the previous file is backed up as config-v<n>.yml.bak first.
-config-version: 7
+config-version: 8
 
 # ====================================
 # Source location settings
-# Each character hunts their own source: a cache buried in natural ground
-# that only they can see, and only while holding a live detector. It is
-# placed near the character when they first hold one, and stays put until
-# they dig it up and open it.
+# A source is a cache buried in natural ground, seen only by hunters holding
+# a live detector. It stays put until someone digs it up and opens it.
 # ====================================
 source:
+  # Who hunts which source. Switch in-game with /geiger mode <player|global>.
+  #   player - each character has their own cache, placed near them when they
+  #            first hold a detector (see min-distance and max-distance)
+  #   global - one cache anywhere in the area below, shared by everyone; the
+  #            first to open it takes the loot and a new one is buried
+  mode: player
+
   # World name where sources spawn. Detectors only read in this world.
   world: world
   
@@ -25,12 +30,12 @@ source:
     x: 1000.0
     z: 1000.0
 
-  # How far (blocks) from the character a new source is placed
+  # Player mode: how far (blocks) from the character a new source is placed
   min-distance: 300.0
   max-distance: 600.0
 
-  # A source further than this from its character is placed again near
-  # them, e.g. after they travel or teleport away
+  # Player mode: a source further than this from its character is placed
+  # again near them, e.g. after they travel or teleport away
   reroll-distance: 1000.0
 
   # How many blocks of ground lie over the cache. It is always sealed in
@@ -76,7 +81,7 @@ source:
 # ====================================
 detection:
   # Maximum distance for Geiger Counter detection (blocks)
-  max-detection-distance: 1000.0
+  max-detection-distance: 2500.0
   
   # Within this many blocks of the cache (measured in 3D, depth included)
   # the detector switches to a close reading: the bar and clicks start over

@@ -16,6 +16,7 @@ import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -44,6 +45,9 @@ public class GeigerConfiguration {
     // World settings
     private World world;
     private double minX, maxX, minZ, maxZ;
+
+    // Whether each character hunts their own source or everyone shares one
+    private HuntMode huntMode;
 
     // Where each character's source is placed, relative to the character
     private double minSourceDistance;
@@ -108,6 +112,7 @@ public class GeigerConfiguration {
     public void load() {
         loadWorld();
         loadSearchArea();
+        loadHuntMode();
         loadSourceDistances();
         loadSpawnFilters();
         loadDetectionSettings();
@@ -143,6 +148,15 @@ public class GeigerConfiguration {
         }
     }
     
+    private void loadHuntMode() {
+        String raw = plugin.getConfig().getString("source.mode", HuntMode.PLAYER.key());
+        huntMode = HuntMode.parse(raw);
+        if (huntMode == null) {
+            plugin.getLogger().warning("source.mode '" + raw + "' is not player or global - using player.");
+            huntMode = HuntMode.PLAYER;
+        }
+    }
+
     // ====================================
     // How far from the character a source is placed, and when it is placed again
     // ====================================
@@ -200,7 +214,7 @@ public class GeigerConfiguration {
     }
 
     private void loadDetectionSettings() {
-        maxDetectionDistance = plugin.getConfig().getDouble("detection.max-detection-distance", 1000.0);
+        maxDetectionDistance = plugin.getConfig().getDouble("detection.max-detection-distance", 2500.0);
         pinpointRange = plugin.getConfig().getDouble("detection.pinpoint-range", 12.0);
         closeRangeThreshold = plugin.getConfig().getDouble("detection.close-range-threshold", 200.0);
         threeRingsDistance = plugin.getConfig().getDouble("detection.ring-thresholds.three-rings", 100.0);
@@ -433,6 +447,7 @@ public class GeigerConfiguration {
     public double getMaxX() { return maxX; }
     public double getMinZ() { return minZ; }
     public double getMaxZ() { return maxZ; }
+    public HuntMode getHuntMode() { return huntMode; }
     public double getMinSourceDistance() { return minSourceDistance; }
     public double getMaxSourceDistance() { return maxSourceDistance; }
     public double getRerollDistance() { return rerollDistance; }
@@ -469,6 +484,29 @@ public class GeigerConfiguration {
 
 
     // =========== Rules for valid source spawn locations ================
+    // ====================================
+    // player: each character hunts their own source near them.
+    // global: one source anywhere in the area, shared by everyone.
+    // ====================================
+    public enum HuntMode {
+        PLAYER, GLOBAL;
+
+        // As written in config.yml and typed in /geiger mode
+        public String key() {
+            return name().toLowerCase(Locale.ROOT);
+        }
+
+        // The mode named by <raw>, or null if none
+        public static HuntMode parse(String raw) {
+            for (HuntMode mode : values()) {
+                if (mode.key().equalsIgnoreCase(raw.trim())) {
+                    return mode;
+                }
+            }
+            return null;
+        }
+    }
+
     public static class SpawnFilterConfig {
         private int maxAttempts = 50;
         private boolean rejectLiquid = true;

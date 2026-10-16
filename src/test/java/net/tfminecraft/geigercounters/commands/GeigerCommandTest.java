@@ -238,9 +238,84 @@ class GeigerCommandTest {
   }
 
   @Test
+  void modeShowsTheCurrentModeValidatesInputAndPersistsTheSwitch() {
+    when(config.getHuntMode()).thenReturn(GeigerConfiguration.HuntMode.PLAYER);
+    run("mode");
+    verify(sender).sendMessage("admin.mode-current");
+    run("mode", "everyone");
+    run("mode", "global", "now");
+    verify(sender, times(2)).sendMessage("admin.mode-usage");
+    verify(manager, never()).reload();
+    run("mode", "GLOBAL");
+    assertEquals("global", plugin.getConfig().getString("source.mode"));
+    verify(plugin).saveConfig();
+    verify(manager).reload();
+    verify(sender).sendMessage("admin.mode-changed");
+  }
+
+  @Test
+  void globalLocateReportsTheSharedSourceToAnyone() {
+    when(config.getHuntMode()).thenReturn(GeigerConfiguration.HuntMode.GLOBAL);
+    when(source.isPlacing(SourceHandler.SHARED)).thenReturn(true, false);
+    run("locate");
+    verify(sender).sendMessage("admin.shared-source-relocating");
+    run("locate", "Hunter");
+    verify(sender).sendMessage("admin.shared-no-source");
+    when(source.getSource(SourceHandler.SHARED)).thenReturn(new Location(world, 5, 40, -7));
+    run("locate");
+    verify(sender).sendMessage("admin.shared-source-located");
+  }
+
+  @Test
+  void globalMoveClearsOrBuriesTheSharedSource() {
+    when(config.getHuntMode()).thenReturn(GeigerConfiguration.HuntMode.GLOBAL);
+    run("move", "Hunter");
+    run("move", "Hunter", "1", "2");
+    verify(sender, times(2)).sendMessage("admin.shared-move-usage");
+    run("move", "bad", "2");
+    verify(sender).sendMessage("admin.move-invalid-coords");
+    verifyNoInteractions(source);
+    run("move");
+    verify(source).clear(SourceHandler.SHARED);
+    verify(sender).sendMessage("admin.shared-move-cleared");
+    CompletableFuture<Location> pending = new CompletableFuture<>();
+    when(source.placeAt(SourceHandler.SHARED, 3, -4)).thenReturn(pending);
+    run("move", "3", "-4");
+    verify(sender, never()).sendMessage("admin.shared-move-success");
+    pending.complete(new Location(world, 3, 50, -4));
+    verify(sender).sendMessage("admin.shared-move-success");
+    when(source.placeAt(SourceHandler.SHARED, 1, 2)).thenReturn(CompletableFuture.completedFuture(null));
+    run("move", "1", "2");
+    verify(sender).sendMessage("admin.move-failed");
+  }
+
+  @Test
+  void globalCompletionSkipsPlayersForLocateAndMoveAndOffersModes() {
+    when(config.getHuntMode()).thenReturn(GeigerConfiguration.HuntMode.GLOBAL);
+    when(config.getMinX()).thenReturn(-5.0);
+    when(config.getMaxX()).thenReturn(5.0);
+    when(config.getMinZ()).thenReturn(-9.0);
+    when(config.getMaxZ()).thenReturn(9.0);
+    Player online = mock(Player.class);
+    when(online.getName()).thenReturn("Hunter");
+    when(online.getUniqueId()).thenReturn(UUID.randomUUID());
+    try (var bukkit = mockStatic(Bukkit.class)) {
+      bukkit.when(Bukkit::getOnlinePlayers).thenReturn(List.of(online));
+      assertTrue(complete(sender, "locate", "").isEmpty());
+      assertEquals(List.of("-5", "5"), complete(sender, "move", ""));
+      assertEquals(List.of("-9", "9"), complete(sender, "move", "1", ""));
+      assertTrue(complete(sender, "move", "1", "2", "").isEmpty());
+      assertEquals(List.of("Hunter"), complete(sender, "limits", "h"));
+    }
+    assertEquals(List.of("player", "global"), complete(sender, "mode", ""));
+    assertEquals(List.of("global"), complete(sender, "mode", "G"));
+    assertTrue(complete(sender, "mode", "global", "").isEmpty());
+  }
+
+  @Test
   void completionFiltersSubcommandsAndDroplistsAndIgnoresExtraArguments() {
     assertEquals(List.of("locate"), complete(sender, "LO"));
-    assertEquals(6, complete(sender, "").size());
+    assertEquals(7, complete(sender, "").size());
     assertEquals(List.of("Hunt"), complete(sender, "droplist", "h"));
     assertTrue(complete(sender, "unknown", "").isEmpty());
     assertTrue(complete(sender, "move", "Hunter", "1", "2", "").isEmpty());

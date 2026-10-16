@@ -51,7 +51,8 @@ class GeigerConfigurationTest {
   void defaultsProvideUsableDetectionSoundLimitsColorsAndSpawnFilters() {
     load();
     assertSame(world, configuration.getWorld());
-    assertEquals(1000, configuration.getMaxDetectionDistance());
+    assertEquals(GeigerConfiguration.HuntMode.PLAYER, configuration.getHuntMode());
+    assertEquals(2500, configuration.getMaxDetectionDistance());
     assertEquals(12, configuration.getPinpointRange());
     assertEquals(300, configuration.getMinSourceDistance());
     assertEquals(600, configuration.getMaxSourceDistance());
@@ -120,6 +121,17 @@ class GeigerConfigurationTest {
     assertEquals(0, configuration.getSoundPitchVariance());
     assertFalse(configuration.isLimitEnabled());
     assertEquals(TimeUnit.HOURS.toMillis(12), configuration.getLimitWindowMillis());
+  }
+
+  @Test
+  void huntModeIsReadInAnyCaseAndFallsBackToPlayer() {
+    yaml.set("source.mode", " Global ");
+    load();
+    assertEquals(GeigerConfiguration.HuntMode.GLOBAL, configuration.getHuntMode());
+    assertEquals("global", configuration.getHuntMode().key());
+    yaml.set("source.mode", "everyone");
+    load();
+    assertEquals(GeigerConfiguration.HuntMode.PLAYER, configuration.getHuntMode());
   }
 
   @Test

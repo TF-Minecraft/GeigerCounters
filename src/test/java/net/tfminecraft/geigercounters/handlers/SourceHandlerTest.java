@@ -201,6 +201,23 @@ class SourceHandlerTest {
   }
 
   @Test
+  void theSharedSourceLandsAnywhereInTheAreaAndRetriesThere() {
+    when(config.getMinX()).thenReturn(100.0);
+    when(config.getMaxX()).thenReturn(300.0);
+    when(config.getMinZ()).thenReturn(-300.0);
+    when(config.getMaxZ()).thenReturn(-100.0);
+    when(filter.check(any())).thenReturn(SpawnLocationFilter.Rejection.LIQUID, (SpawnLocationFilter.Rejection) null);
+    for (int run = 0; run < 100; run++) {
+      Location loc = handler.placeAnywhere(SourceHandler.SHARED).join();
+      assertTrue(loc.getX() >= 99 && loc.getX() <= 301, "x " + loc.getX());
+      assertTrue(loc.getZ() >= -301 && loc.getZ() <= -99, "z " + loc.getZ());
+      assertSame(loc, handler.getSource(SourceHandler.SHARED));
+    }
+    verify(filter, times(101)).check(any());
+    assertNull(handler.getSource(hunter));
+  }
+
+  @Test
   void rejectedCandidatesRetryThenAccept() {
     when(filter.check(any())).thenReturn(SpawnLocationFilter.Rejection.LIQUID, null);
     assertNotNull(handler.placeNear(hunter, origin).join());

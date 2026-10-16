@@ -12,7 +12,9 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import net.tfminecraft.geigercounters.config.GeigerConfiguration;
+import net.tfminecraft.geigercounters.config.GeigerConfiguration.HuntMode;
 import net.tfminecraft.geigercounters.config.Messages;
+import net.tfminecraft.geigercounters.handlers.SourceHandler;
 import net.tfminecraft.geigercounters.managers.GeigerManager;
 import net.tfminecraft.geigercounters.utils.Hunters;
 import net.tfminecraft.geigercounters.utils.Utils;
@@ -29,11 +31,12 @@ import java.util.UUID;
 
 // ====================================
 // Admin command handler:
-// /geiger <locate [player]|move <player> [x z]|limits <player>|resetlimits <player>|droplist [name]|reload>
+// /geiger <locate [player]|move <player> [x z]|mode [player|global]|limits <player>|resetlimits <player>|droplist [name]|reload>
+// In global mode locate and move act on the shared source: /geiger locate, /geiger move [x z]
 // ====================================
 public class GeigerCommand implements CommandExecutor, TabCompleter, Listener {
 
-    private static final List<String> SUBCOMMANDS = Arrays.asList("locate", "move", "limits", "resetlimits", "droplist", "reload");
+    private static final List<String> SUBCOMMANDS = Arrays.asList("locate", "move", "mode", "limits", "resetlimits", "droplist", "reload");
 
     private final GeigerManager manager;
     private final Map<UUID, String> knownNames = new LinkedHashMap<>();
@@ -72,6 +75,9 @@ public class GeigerCommand implements CommandExecutor, TabCompleter, Listener {
             case "move":
                 handleMove(sender, args);
                 return true;
+            case "mode":
+                handleMode(sender, args);
+                return true;
             // Singular spellings are aliases - both read naturally
             case "limit":
             case "limits":
@@ -96,6 +102,10 @@ public class GeigerCommand implements CommandExecutor, TabCompleter, Listener {
     // /geiger locate          -> the sender's own source
     // /geiger locate <player> -> that player's current character's source
     private void handleLocate(CommandSender sender, String[] args) {
+        if (isGlobal()) {
+            locateShared(sender);
+            return;
+        }
         if (args.length > 2 || (args.length == 1 && !(sender instanceof Player))) {
             sender.sendMessage(messages().get("admin.locate-usage"));
             return;
@@ -129,24 +139,18 @@ public class GeigerCommand implements CommandExecutor, TabCompleter, Listener {
     // /geiger move <player>         -> clear it; a new one is placed near them on their next hold
     // /geiger move <player> <x> <z> -> buried under these coordinates
     private void handleMove(CommandSender sender, String[] args) {
+        if (isGlobal()) {
+            moveShared(sender, args);
+            return;
+        }
         if (args.length != 2 && args.length != 4) {
             sender.sendMessage(messages().get("admin.move-usage"));
             return;
         }
 
-        double x = 0;
-        double z = 0;
-        if (args.length == 4) {
-            try {
-                x = Double.parseDouble(args[2]);
-                z = Double.parseDouble(args[3]);
-                if (!Double.isFinite(x) || !Double.isFinite(z)) {
-                    throw new NumberFormatException("Coordinates must be finite");
-                }
-            } catch (NumberFormatException e) {
-                sender.sendMessage(messages().get("admin.move-invalid-coords"));
-                return;
-            }
+        double[] coords = args.length == 4 ? parseCoordinates(sender, args[2], args[3]) : null;
+        if (args.length == 4 && coords == null) {
+            return;
         }
 
         Player target = onlineTarget(sender, args[1]);
@@ -162,8 +166,105 @@ public class GeigerCommand implements CommandExecutor, TabCompleter, Listener {
         }
 
         String name = target.getName();
-        manager.getSourceHandler().placeAt(hunter, x, z)
+        manager.getSourceHandler().placeAt(hunter, coords[0], coords[1])
             .thenAccept(location -> sendNewLocation(sender, name, location));
+    }
+
+    // The X and Z typed, or null after telling the sender they are not numbers
+    private double[] parseCoordinates(CommandSender sender, String rawX, String rawZ) {
+        try {
+            double x = Double.parseDouble(rawX);
+            double z = Double.parseDouble(rawZ);
+            if (!Double.isFinite(x) || !Double.isFinite(z)) {
+                throw new NumberFormatException("Coordinates must be finite");
+            }
+            return new double[] {x, z};
+        } catch (NumberFormatException e) {
+            sender.sendMessage(messages().get("admin.move-invalid-coords"));
+            return null;
+        }
+    }
+
+    private boolean isGlobal() {
+        return manager.getConfiguration().getHuntMode() == HuntMode.GLOBAL;
+    }
+
+    // /geiger locate in global mode -> the shared source, whoever asks
+    private void locateShared(CommandSender sender) {
+        SourceHandler sources = manager.getSourceHandler();
+        if (sources.isPlacing(SourceHandler.SHARED)) {
+            sender.sendMessage(messages().get("admin.shared-source-relocating"));
+            return;
+        }
+
+        Location source = sources.getSource(SourceHandler.SHARED);
+        if (source == null) {
+            sender.sendMessage(messages().get("admin.shared-no-source"));
+            return;
+        }
+
+        sender.sendMessage(messages().get("admin.shared-source-located",
+            "%x%", source.getBlockX(),
+            "%y%", source.getBlockY(),
+            "%z%", source.getBlockZ(),
+            "%world%", source.getWorld().getName()));
+    }
+
+    // /geiger move       -> clear the shared source; a new one is buried on the next hold
+    // /geiger move <x z> -> bury it under these coordinates
+    private void moveShared(CommandSender sender, String[] args) {
+        if (args.length != 1 && args.length != 3) {
+            sender.sendMessage(messages().get("admin.shared-move-usage"));
+            return;
+        }
+
+        if (args.length == 1) {
+            manager.getSourceHandler().clear(SourceHandler.SHARED);
+            sender.sendMessage(messages().get("admin.shared-move-cleared"));
+            return;
+        }
+
+        double[] coords = parseCoordinates(sender, args[1], args[2]);
+        if (coords == null) {
+            return;
+        }
+        manager.getSourceHandler().placeAt(SourceHandler.SHARED, coords[0], coords[1])
+            .thenAccept(location -> sendSharedLocation(sender, location));
+    }
+
+    private void sendSharedLocation(CommandSender sender, Location source) {
+        if (source == null) {
+            sender.sendMessage(messages().get("admin.move-failed"));
+            return;
+        }
+
+        sender.sendMessage(messages().get("admin.shared-move-success",
+            "%x%", source.getBlockX(),
+            "%y%", source.getBlockY(),
+            "%z%", source.getBlockZ()));
+    }
+
+    // /geiger mode        -> which mode is in use
+    // /geiger mode <mode> -> switch to it, saved to config.yml. Each mode keeps
+    //                        its own sources, so switching back resumes them.
+    private void handleMode(CommandSender sender, String[] args) {
+        if (args.length == 1) {
+            sender.sendMessage(messages().get("admin.mode-current",
+                "%mode%", manager.getConfiguration().getHuntMode().key()));
+            return;
+        }
+
+        HuntMode mode = args.length == 2 ? HuntMode.parse(args[1]) : null;
+        if (mode == null) {
+            sender.sendMessage(messages().get("admin.mode-usage"));
+            return;
+        }
+
+        manager.getPlugin().getConfig().set("source.mode", mode.key());
+        manager.getPlugin().saveConfig();
+        manager.reload();
+
+        sender.sendMessage(messages().get("admin.mode-changed", "%mode%", mode.key()));
     }
 
     // Sources belong to characters, so the target has to be online to know which one
@@ -303,11 +404,9 @@ public class GeigerCommand implements CommandExecutor, TabCompleter, Listener {
 
     // ====================================
     // Suggest coordinates worth typing: where the sender is standing, and the
-    // corners of the configured search area. Axis follows the argument -
-    // X for the first, Z for the second.
+    // corners of the configured search area, on the X axis or the Z.
     // ====================================
-    private List<String> completeCoordinate(CommandSender sender, String[] args) {
-        boolean isX = args.length == 3;
+    private List<String> completeCoordinate(CommandSender sender, String[] args, boolean isX) {
         String typed = args[args.length - 1];
 
         List<String> suggestions = new ArrayList<>();
@@ -354,9 +453,26 @@ public class GeigerCommand implements CommandExecutor, TabCompleter, Listener {
             return matches;
         }
 
-        // Coordinates for /geiger move <player> <x> <z>
-        if (args[0].equalsIgnoreCase("move") && (args.length == 3 || args.length == 4)) {
-            return completeCoordinate(sender, args);
+        // Coordinates for /geiger move <player> <x> <z>, or /geiger move <x> <z> in global mode
+        if (args[0].equalsIgnoreCase("move")) {
+            int first = isGlobal() ? 2 : 3;
+            if (args.length == first || args.length == first + 1) {
+                return completeCoordinate(sender, args, args.length == first);
+            }
+            if (isGlobal()) {
+                return new ArrayList<>();
+            }
+        }
+
+        // /geiger mode <player|global>
+        if (args.length == 2 && args[0].equalsIgnoreCase("mode")) {
+            List<String> matches = new ArrayList<>();
+            for (HuntMode mode : HuntMode.values()) {
+                if (mode.key().startsWith(args[1].toLowerCase(Locale.ROOT))) {
+                    matches.add(mode.key());
+                }
+            }
+            return matches;
         }
 
         // Drop list names for /geiger droplist <name>
@@ -370,8 +486,10 @@ public class GeigerCommand implements CommandExecutor, TabCompleter, Listener {
             return matches;
         }
 
-        // locate, move and both limit subcommands (either spelling) take a player name
-        if (args.length == 2 && takesPlayer(args[0])) {
+        // locate, move and both limit subcommands (either spelling) take a player name;
+        // in global mode locate takes none
+        boolean sharedLocate = isGlobal() && args[0].equalsIgnoreCase("locate");
+        if (args.length == 2 && takesPlayer(args[0]) && !sharedLocate) {
             Map<UUID, String> names = new LinkedHashMap<>();
             if (args[0].equalsIgnoreCase("limit") || args[0].equalsIgnoreCase("limits")
                     || args[0].equalsIgnoreCase("resetlimit") || args[0].equalsIgnoreCase("resetlimits")) {

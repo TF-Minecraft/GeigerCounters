@@ -35,16 +35,21 @@ import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
 
 // ====================================
 // Each hunter's radioactive source: placement, persistence and opening.
-// A hunter is the character being played (the account without RPCharacters).
+// A hunter is the character being played (the account without RPCharacters),
+// or SHARED for the one source everyone hunts in global mode.
 //
 // A source is a cache buried in natural ground. Its location is the centre
 // of the cache block, which the hunter digs down to and opens by hand.
 // ====================================
 public class SourceHandler {
     
+    // The hunter that owns the global source
+    public static final UUID SHARED = new UUID(0L, 0L);
+
     private static final String DEAD_GEIGER_PATH = "m.TOOLS.DEAD_GEIGER_COUNTER";
 
     // A player clicking at a cache they may not open yet would otherwise get
@@ -140,6 +145,18 @@ public class SourceHandler {
     // The returned future completes on the main thread with the chosen location.
     // ====================================
     public CompletableFuture<Location> placeNear(UUID hunter, Location origin) {
+        return place(hunter, () -> randomSpotNear(origin.getX(), origin.getZ()));
+    }
+
+    // ====================================
+    // Place the hunter's source at a random spot anywhere in the area, as
+    // placeNear does but with no ring around anyone. Used for the shared source.
+    // ====================================
+    public CompletableFuture<Location> placeAnywhere(UUID hunter) {
+        return place(hunter, this::randomSpotInArea);
+    }
+
+    private CompletableFuture<Location> place(UUID hunter, Supplier<double[]> spots) {
         // Collapse overlapping requests onto the search already running
         CompletableFuture<Location> running = pending.get(hunter);
         if (running != null) {
@@ -150,7 +167,7 @@ public class SourceHandler {
             return CompletableFuture.completedFuture(null);
         }
 
-        double[] first = randomSpotNear(origin.getX(), origin.getZ());
+        double[] first = spots.get();
         if (first == null) {
             return CompletableFuture.completedFuture(null);
         }
@@ -161,7 +178,7 @@ public class SourceHandler {
 
         CompletableFuture<Location> result = new CompletableFuture<>();
         pending.put(hunter, result);
-        attemptPlacement(hunter, origin.getX(), origin.getZ(), first, 1, null, result);
+        attemptPlacement(hunter, spots, first, 1, null, result);
         return result;
     }
 
@@ -185,8 +202,14 @@ public class SourceHandler {
         return null;
     }
 
+    private double[] randomSpotInArea() {
+        return new double[] {
+            config.getMinX() + random.nextDouble() * (config.getMaxX() - config.getMinX()),
+            config.getMinZ() + random.nextDouble() * (config.getMaxZ() - config.getMinZ())};
+    }
+
     // <sealed> is the last candidate so far that was sealed in natural ground
-    private void attemptPlacement(UUID hunter, double originX, double originZ, double[] spot, int attempt,
+    private void attemptPlacement(UUID hunter, Supplier<double[]> spots, double[] spot, int attempt,
                                   Location sealed, CompletableFuture<Location> result) {
         double x = spot[0];
         double z = spot[1];
@@ -213,16 +236,16 @@ public class SourceHandler {
                 return;
             }
 
-            double[] next = attempt >= maxAttempts ? null : randomSpotNear(originX, originZ);
+            double[] next = attempt >= maxAttempts ? null : spots.get();
             if (next != null) {
-                attemptPlacement(hunter, originX, originZ, next, attempt + 1, fallback, result);
+                attemptPlacement(hunter, spots, next, attempt + 1, fallback, result);
                 return;
             }
 
             if (fallback == null) {
                 plugin.getLogger().warning(String.format(
                     "No sealed source location found for %s after %d attempts (last rejection: %s). "
-                        + "Trying again in a minute.", hunter, attempt, rejection.getDescription()));
+                        + "Trying again in a minute.", owner(hunter), attempt, rejection.getDescription()));
                 pending.remove(hunter);
                 retryAt.put(hunter, System.currentTimeMillis() + RETRY_MILLIS);
                 result.complete(null);
@@ -338,8 +361,12 @@ public class SourceHandler {
         save();
 
         plugin.getLogger().info(String.format("Source for %s buried at X = %d Y = %d Z = %d (%d attempt%s)",
-            hunter, location.getBlockX(), location.getBlockY(), location.getBlockZ(), attempts, attempts == 1 ? "" : "s"));
+            owner(hunter), location.getBlockX(), location.getBlockY(), location.getBlockZ(), attempts, attempts == 1 ? "" : "s"));
         result.complete(location);
+    }
+
+    private static String owner(UUID hunter) {
+        return SHARED.equals(hunter) ? "everyone" : hunter.toString();
     }
 
     // ====================================

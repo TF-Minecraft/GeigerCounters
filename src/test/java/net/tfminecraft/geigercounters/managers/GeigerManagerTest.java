@@ -243,6 +243,45 @@ class GeigerManagerTest {
   }
 
   @Test
+  void globalModeReadsTheSharedSourceWithoutRerollingIt() throws Exception {
+    when(config.getHuntMode()).thenReturn(GeigerConfiguration.HuntMode.GLOBAL);
+    Player p = player(world, true, false);
+    check(Optional.empty(), p);
+    verifyNoInteractions(source);
+    check(p);
+    verify(source).placeAnywhere(SourceHandler.SHARED);
+    // Far beyond reroll-distance the shared source still reads
+    Location far = new Location(world, 2003, 64, 4);
+    when(source.getSource(SourceHandler.SHARED)).thenReturn(far);
+    check(p);
+    verify(clicks).updateRate(p, 2000);
+    verify(bar).update(p, far, 2000);
+    when(source.getSource(SourceHandler.SHARED)).thenReturn(new Location(mock(World.class), 3, 64, 4));
+    check(p);
+    verify(source, times(2)).placeAnywhere(SourceHandler.SHARED);
+    verify(source, never()).placeNear(any(), any());
+    verify(source, never()).getSource(hunter);
+  }
+
+  @Test
+  void globalModeOpensAndMovesTheSharedCache() {
+    when(config.getHuntMode()).thenReturn(GeigerConfiguration.HuntMode.GLOBAL);
+    cache.setWorld(world);
+    block.setWorld(world);
+    when(source.getSource(SourceHandler.SHARED)).thenReturn(cache);
+    Player p = player(world, true, false);
+    open(Optional.of(hunter), p, block);
+    verify(source).open(p, SourceHandler.SHARED, EquipmentSlot.HAND);
+    when(config.getMessages()).thenReturn(mock(Messages.class));
+    try (var h = mockStatic(Hunters.class)) {
+      h.when(() -> Hunters.of(p)).thenReturn(Optional.of(hunter));
+      manager.groundProtected(p);
+    }
+    verify(source).placeAnywhere(SourceHandler.SHARED);
+    verify(source, never()).placeNear(any(), any());
+  }
+
+  @Test
   void shutdownHandlesUninitializedAndInitializedComponents() throws Exception {
     set(manager, "clickPlayer", null);
     set(manager, "signalBar", null);

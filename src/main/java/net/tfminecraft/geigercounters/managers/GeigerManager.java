@@ -9,6 +9,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.plugin.java.JavaPlugin;
 import net.tfminecraft.geigercounters.config.GeigerConfiguration;
+import net.tfminecraft.geigercounters.config.GeigerConfiguration.HuntMode;
 import net.tfminecraft.geigercounters.handlers.BuriedChest;
 import net.tfminecraft.geigercounters.handlers.CacheMenu;
 import net.tfminecraft.geigercounters.handlers.GeigerClickPlayer;
@@ -184,7 +185,7 @@ public class GeigerManager implements BuriedChest.Actions {
             if (geigerSlot == null) {
                 continue;
             }
-            Optional<UUID> hunter = Hunters.of(player);
+            Optional<UUID> hunter = huntOf(player);
             if (hunter.isPresent() && handlePlayerWithGeiger(player, hunter.get(), revealed)) {
                 hunting.add(player.getUniqueId());
             }
@@ -206,22 +207,44 @@ public class GeigerManager implements BuriedChest.Actions {
     }
 
     // ====================================
-    // Returns whether the player has a source to read. One is placed near
-    // them when they have none, or have strayed beyond reroll-distance.
+    // Whose source the player reads: their character's, or in global mode the
+    // shared one. A player with no active character reads none.
+    // ====================================
+    private Optional<UUID> huntOf(Player player) {
+        Optional<UUID> hunter = Hunters.of(player);
+        if (configuration.getHuntMode() == HuntMode.GLOBAL) {
+            return hunter.map(character -> SourceHandler.SHARED);
+        }
+        return hunter;
+    }
+
+    // The shared source goes anywhere in the area, a character's near them
+    private void placeSource(UUID hunter, Player player) {
+        if (SourceHandler.SHARED.equals(hunter)) {
+            sourceHandler.placeAnywhere(hunter);
+        } else {
+            sourceHandler.placeNear(hunter, player.getLocation());
+        }
+    }
+
+    // ====================================
+    // Returns whether the player has a source to read. One is placed when
+    // there is none, or a character's has been left beyond reroll-distance.
     // Players near enough to see their cache are added to <revealed>.
     // ====================================
     private boolean handlePlayerWithGeiger(Player player, UUID hunter, Set<UUID> revealed) {
         Location source = sourceHandler.getSource(hunter);
         if (source == null) {
             if (!sourceHandler.isPlacing(hunter)) {
-                sourceHandler.placeNear(hunter, player.getLocation());
+                placeSource(hunter, player);
             }
             return false;
         }
 
         double distance = calculateHorizontalDistance(player.getLocation(), source);
-        if (!player.getWorld().equals(source.getWorld()) || distance > configuration.getRerollDistance()) {
-            sourceHandler.placeNear(hunter, player.getLocation());
+        boolean leftBehind = !SourceHandler.SHARED.equals(hunter) && distance > configuration.getRerollDistance();
+        if (!player.getWorld().equals(source.getWorld()) || leftBehind) {
+            placeSource(hunter, player);
             return false;
         }
 
@@ -246,12 +269,12 @@ public class GeigerManager implements BuriedChest.Actions {
 
     // ====================================
     // The hunter clicked a chest, which only shows while they hold a detector.
-    // It must still be their current character's cache; one shown before a
-    // move or a character switch opens nothing.
+    // It must still be the cache they hunt; one shown before a move, a
+    // character switch or a mode switch opens nothing.
     // ====================================
     @Override
     public void open(Player player, Location block) {
-        Optional<UUID> hunter = Hunters.of(player);
+        Optional<UUID> hunter = huntOf(player);
         EquipmentSlot geigerSlot = findGeigerSlot(player);
         if (hunter.isEmpty() || geigerSlot == null) {
             return;
@@ -268,13 +291,13 @@ public class GeigerManager implements BuriedChest.Actions {
     // ====================================
     @Override
     public void groundProtected(Player player) {
-        Optional<UUID> hunter = Hunters.of(player);
+        Optional<UUID> hunter = huntOf(player);
         if (hunter.isEmpty()) {
             return;
         }
         player.sendMessage(configuration.getMessages().get("player.cache-protected"));
         buriedChest.hide(player);
-        sourceHandler.placeNear(hunter.get(), player.getLocation());
+        placeSource(hunter.get(), player);
     }
     
     // ===== DISTANCE CALCULATION =====

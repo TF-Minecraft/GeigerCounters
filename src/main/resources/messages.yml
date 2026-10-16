@@ -43,7 +43,7 @@ player:
 # ====================================
 admin:
   # /geiger with no arguments, or an unknown subcommand
-  usage: "&eUsage: /geiger <locate [player]|move <player> [x z]|limits <player>|resetlimits <player>|droplist [name]|reload>"
+  usage: "&eUsage: /geiger <locate [player]|move <player> [x z]|mode [player|global]|limits <player>|resetlimits <player>|droplist [name]|reload>"
 
   # /geiger locate from the console without a player
   locate-usage: "&cUsage: /geiger locate <player>"
@@ -70,6 +70,21 @@ admin:
   move-cleared: "&a%player%'s source cleared. A new one is placed near them when they next hold a detector."
   # %player% = whose source, %x% %y% %z% = the cache block it was buried at
   move-success: "&a%player%'s cache buried at X = %x% Y = %y% Z = %z%"
+
+  # /geiger locate and move in global mode, where everyone shares one source
+  # %x% %y% %z% = cache block, %world% = world name
+  shared-source-located: "&aThe shared cache is buried at X = %x% Y = %y% Z = %z% (world: %world%)"
+  shared-source-relocating: "&cThe shared source is being placed right now."
+  shared-no-source: "&7There is no shared source yet. One is buried when someone holds a live detector."
+  shared-move-usage: "&cUsage: /geiger move [x z] (global mode)"
+  shared-move-cleared: "&aShared source cleared. A new one is buried when someone next holds a detector."
+  shared-move-success: "&aShared cache buried at X = %x% Y = %y% Z = %z%"
+
+  # /geiger mode [player|global]
+  mode-usage: "&cUsage: /geiger mode [player|global]"
+  # %mode% = player or global
+  mode-current: "&aHunt mode: &f%mode% &7(player = a source per character, global = one shared source)"
+  mode-changed: "&aHunt mode switched to &f%mode%&a."
 
   # /geiger limits <player>
   limits-usage: "&cUsage: /geiger limits <player>"

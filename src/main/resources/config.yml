@@ -106,8 +106,8 @@ detection:
 # A boss bar shown while holding a detector. It fills as the player gets
 # closer and peaks when they face their source. Distance is measured in 3D
 # on a log scale: each halving of the distance fills the same amount, and the
-# bar is full at pinpoint-range. Within pinpoint-range it shows closeness to
-# the cache alone.
+# bar nears full just outside pinpoint-range. There it switches to the close
+# reading, which starts empty and fills up on the cache itself.
 # ====================================
 bar:
   enabled: true
@@ -141,9 +141,10 @@ sound:
   pitch: 1.7
   pitch-variance: 0.15
 
-  # Clicks per second at max-detection-distance and at pinpoint-range.
-  # Like the bar, the rate climbs on a log scale of the 3D distance.
-  # 20 is the ceiling - one click per tick
+  # Clicks per second at max-detection-distance and just outside
+  # pinpoint-range. Like the bar, the rate climbs on a log scale of the 3D
+  # distance; at pinpoint-range it drops back to min-rate and climbs again
+  # to max-rate on the cache. 20 is the ceiling - one click per tick
   min-rate: 0.5
   max-rate: 18.0
 

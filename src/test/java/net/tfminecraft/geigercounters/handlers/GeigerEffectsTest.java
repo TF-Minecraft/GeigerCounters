@@ -29,6 +29,7 @@ class GeigerEffectsTest {
     when(player.isOnline()).thenReturn(true);
     when(player.getLocation()).thenAnswer(invocation -> new Location(world, 10, 64, 20));
     when(config.getMaxDetectionDistance()).thenReturn(1000.0);
+    when(config.getPinpointRange()).thenReturn(10.0);
     when(config.getCloseRangeThreshold()).thenReturn(50.0);
     when(config.getThreeRingsDistance()).thenReturn(100.0);
     when(config.getTwoRingsDistance()).thenReturn(300.0);
@@ -122,6 +123,25 @@ class GeigerEffectsTest {
       clicker.updateRate(player, 0);
       clicker.tick();
       verify(player, never())
+          .playSound(
+              any(Location.class), anyString(), any(SoundCategory.class), anyFloat(), anyFloat());
+    }
+  }
+
+  @Test
+  void soundRateClimbsOnALogScaleAndPeaksAtPinpointRange() throws Exception {
+    // Clicks per tick: 1 at pinpoint range; at 100 blocks closeness 0.5,
+    // squared by the curve, gives (1 + 19 * 0.25) / 20 = 0.2875
+    double[][] cases = {{10, 0.999, 1}, {100, 0.28, 1}, {100, 0.29, 0}};
+    for (double[] reading : cases) {
+      GeigerClickPlayer clicker = clicker(reading[1]);
+      clearInvocations(player);
+      try (var bukkit = mockStatic(Bukkit.class)) {
+        bukkit.when(() -> Bukkit.getPlayer(id)).thenReturn(player);
+        clicker.updateRate(player, reading[0]);
+        clicker.tick();
+      }
+      verify(player, times((int) reading[2]))
           .playSound(
               any(Location.class), anyString(), any(SoundCategory.class), anyFloat(), anyFloat());
     }

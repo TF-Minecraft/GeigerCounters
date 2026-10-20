@@ -250,14 +250,15 @@ public class GeigerManager implements BuriedChest.Actions {
 
         particleRenderer.showParticleEffect(player, distance);
 
-        // Depth counts once the hunter is close enough to start digging
+        // The readings count depth, so standing high above the cache never
+        // reads as full; within pinpoint range they switch to the close reading
         double reach = player.getLocation().distance(source);
         if (reach <= configuration.getPinpointRange()) {
             clickPlayer.updatePinpoint(player, reach);
             signalBar.pinpoint(player, reach);
         } else {
-            clickPlayer.updateRate(player, distance);
-            signalBar.update(player, source, distance);
+            clickPlayer.updateRate(player, reach);
+            signalBar.update(player, source, reach);
         }
 
         if (reach <= BuriedChest.REVEAL_DISTANCE) {

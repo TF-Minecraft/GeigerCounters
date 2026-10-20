@@ -49,15 +49,18 @@ class SignalBarTest {
     return captor.getValue();
   }
 
+  // Closeness at 50 blocks on the 10..100 log scale
+  static final double AT_50 = 1.0 - Math.log10(5);
+
   @Test
   void barIsShownOnceThenUpdatedInPlace() {
     bar.update(player, new Location(world, 0, 64, 50), 50);
     BossBar shown = shown();
-    assertEquals(0.5f, shown.progress(), 1e-6);
+    assertEquals(AT_50, shown.progress(), 1e-6);
     assertEquals(BossBar.Color.PURPLE, shown.color());
     assertEquals(BossBar.Overlay.NOTCHED_10, shown.overlay());
     bar.update(player, new Location(world, 0, 64, -50), 50);
-    assertEquals(0.25f, shown.progress(), 1e-6);
+    assertEquals(AT_50 / 2, shown.progress(), 1e-6);
     verify(player, times(1)).showBossBar(any(BossBar.class));
   }
 
@@ -71,7 +74,7 @@ class SignalBarTest {
     bar.pinpoint(player, 30);
     assertEquals(0f, shown.progress(), 1e-6);
     bar.update(player, new Location(world, 0, 64, 50), 50);
-    assertEquals(0.5f, shown.progress(), 1e-6);
+    assertEquals(AT_50, shown.progress(), 1e-6);
     assertEquals("Arcane signal", PlainTextComponentSerializer.plainText().serialize(shown.name()));
     verify(player, times(1)).showBossBar(any(BossBar.class));
   }
@@ -127,9 +130,15 @@ class SignalBarTest {
   void signalFallsWithDistanceAndPeaksWhenFacingTheSource() {
     Location from = player.getLocation();
     assertEquals(1.0, bar.signal(from, new Location(world, 0, 64, 1), 0), 1e-9);
+    // Full from pinpoint range in, empty from bar range out
+    assertEquals(1.0, bar.signal(from, new Location(world, 0, 64, 10), 10), 1e-9);
     assertEquals(0.0, bar.signal(from, new Location(world, 0, 64, 150), 150), 1e-9);
     when(config.getBarFacingWeight()).thenReturn(0.0);
-    assertEquals(0.5, bar.signal(from, new Location(world, 0, 64, -50), 50), 1e-9);
+    assertEquals(AT_50, bar.signal(from, new Location(world, 0, 64, -50), 50), 1e-9);
+    // Every halving of the distance fills the same amount
+    Location behind = new Location(world, 0, 64, -1);
+    double at20 = bar.signal(from, behind, 20), at40 = bar.signal(from, behind, 40);
+    assertEquals(at20 - at40, at40 - bar.signal(from, behind, 80), 1e-9);
   }
 
   @Test

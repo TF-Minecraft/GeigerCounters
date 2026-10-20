@@ -53,7 +53,7 @@ class GeigerConfigurationTest {
     assertSame(world, configuration.getWorld());
     assertEquals(GeigerConfiguration.HuntMode.PLAYER, configuration.getHuntMode());
     assertEquals(2500, configuration.getMaxDetectionDistance());
-    assertEquals(12, configuration.getPinpointRange());
+    assertEquals(20, configuration.getPinpointRange());
     assertEquals(300, configuration.getMinSourceDistance());
     assertEquals(600, configuration.getMaxSourceDistance());
     assertEquals(3, configuration.getMinBurialDepth());
@@ -62,7 +62,7 @@ class GeigerConfigurationTest {
     assertTrue(configuration.isBarEnabled());
     assertEquals(750, configuration.getBarRange());
     assertEquals(0.6, configuration.getBarFacingWeight());
-    assertEquals(200, configuration.getCloseRangeThreshold());
+    assertEquals(60, configuration.getCloseRangeThreshold());
     assertEquals(100, configuration.getThreeRingsDistance());
     assertEquals(300, configuration.getTwoRingsDistance());
     assertTrue(configuration.isSoundEnabled());
@@ -148,7 +148,7 @@ class GeigerConfigurationTest {
     load();
     assertEquals(1, configuration.getMinBurialDepth());
     assertEquals(1, configuration.getMaxBurialDepth());
-    assertEquals(12, configuration.getPinpointRange());
+    assertEquals(20, configuration.getPinpointRange());
     assertEquals(0, configuration.getMinSourceDistance());
     assertEquals(0, configuration.getMaxSourceDistance());
     assertEquals(0, configuration.getRerollDistance());
@@ -162,11 +162,11 @@ class GeigerConfigurationTest {
     yaml.set("bar.facing-weight", -1);
     yaml.set("source.burial.min-depth", 2);
     yaml.set("source.burial.max-depth", 8);
-    yaml.set("detection.pinpoint-range", 20);
+    yaml.set("detection.pinpoint-range", 30);
     load();
     assertEquals(2, configuration.getMinBurialDepth());
     assertEquals(8, configuration.getMaxBurialDepth());
-    assertEquals(20, configuration.getPinpointRange());
+    assertEquals(30, configuration.getPinpointRange());
     assertEquals(100, configuration.getMinSourceDistance());
     assertEquals(300, configuration.getMaxSourceDistance());
     assertEquals(600, configuration.getRerollDistance());

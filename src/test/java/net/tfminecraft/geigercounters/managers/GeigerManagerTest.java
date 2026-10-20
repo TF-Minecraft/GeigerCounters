@@ -153,18 +153,19 @@ class GeigerManagerTest {
   }
 
   @Test
-  void bothHandsReadHorizontalDistanceAndKeepTheirBars() throws Exception {
-    Location at = new Location(world, 0, -64, 0);
+  void bothHandsReadParticlesFlatAndTheBarAndClicksIn3D() throws Exception {
+    // 20 blocks across, 99 down: 101 in 3D
+    Location at = new Location(world, 15, 51, 20);
     when(source.getSource(hunter)).thenReturn(at);
     Player main = player(world, true, true), off = player(world, false, true);
     check(main, off);
-    verify(particles).showParticleEffect(main, 5);
-    verify(particles).showParticleEffect(off, 5);
-    verify(clicks).updateRate(off, 5);
-    verify(bar).update(main, at, 5);
+    verify(particles).showParticleEffect(main, 20);
+    verify(particles).showParticleEffect(off, 20);
+    verify(clicks).updateRate(off, 101);
+    verify(bar).update(main, at, 101);
     verify(bar).retain(Set.of(main.getUniqueId(), off.getUniqueId()));
     verify(source, never()).placeNear(any(), any());
-    // Over 200 blocks of depth away: no close reading and no chest
+    // Too deep for the close reading or the chest
     verify(clicks, never()).updatePinpoint(any(), anyDouble());
     verify(chest, never()).show(any(), any());
     verify(chest).retain(Set.of());
@@ -176,8 +177,10 @@ class GeigerManagerTest {
     when(source.getSource(hunter)).thenReturn(at);
     Player p = player(world, true, false);
     check(p);
-    verify(clicks).updateRate(p, 0);
-    verify(bar).update(p, at, 0);
+    // Straight above but 20 blocks up: depth keeps the bar short of full
+    verify(particles).showParticleEffect(p, 0);
+    verify(clicks).updateRate(p, 20);
+    verify(bar).update(p, at, 20);
     verify(chest).show(p, at);
     verify(chest).retain(Set.of(p.getUniqueId()));
   }
@@ -251,7 +254,7 @@ class GeigerManagerTest {
     check(p);
     verify(source).placeAnywhere(SourceHandler.SHARED);
     // Far beyond reroll-distance the shared source still reads
-    Location far = new Location(world, 2003, 64, 4);
+    Location far = new Location(world, 2003, 150, 4);
     when(source.getSource(SourceHandler.SHARED)).thenReturn(far);
     check(p);
     verify(clicks).updateRate(p, 2000);

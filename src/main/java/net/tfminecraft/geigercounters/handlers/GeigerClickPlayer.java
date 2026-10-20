@@ -4,6 +4,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.SoundCategory;
 import org.bukkit.entity.Player;
 import net.tfminecraft.geigercounters.config.GeigerConfiguration;
+import net.tfminecraft.geigercounters.utils.Closeness;
 
 import java.util.HashMap;
 import java.util.Iterator;
@@ -45,8 +46,8 @@ public class GeigerClickPlayer {
     }
 
     // ====================================
-    // Record how fast this player should be clicking
-    // Called by the periodic player check, not every tick
+    // Record how fast this player should be clicking for a cache <distance>
+    // blocks away in 3D. Called by the periodic player check, not every tick
     // ====================================
     public void updateRate(Player player, double distance) {
         setRate(player, calculateClicksPerTick(distance));
@@ -127,7 +128,8 @@ public class GeigerClickPlayer {
     // ====================================
     // Map distance to clicks per tick.
     //
-    // Full rate at the source, falling to the minimum at max detection range.
+    // Full rate at pinpoint range, falling to the minimum at max detection
+    // range on a log scale, so the rate still climbs in the last stretch.
     // The curve exponent biases the fast clicking toward close range, so the
     // "getting hot" feeling lands where the player is actually hunting.
     // ====================================
@@ -137,8 +139,8 @@ public class GeigerClickPlayer {
             return 0.0;
         }
 
-        double progress = Math.min(1.0, Math.max(0.0, distance / maxDistance));
-        double closeness = Math.pow(1.0 - progress, config.getSoundCurve());
+        double closeness = Math.pow(
+            Closeness.logarithmic(distance, config.getPinpointRange(), maxDistance), config.getSoundCurve());
 
         double minRate = config.getSoundMinRate();
         double maxRate = config.getSoundMaxRate();

@@ -215,14 +215,14 @@ public class GeigerConfiguration {
 
     private void loadDetectionSettings() {
         maxDetectionDistance = plugin.getConfig().getDouble("detection.max-detection-distance", 2500.0);
-        pinpointRange = plugin.getConfig().getDouble("detection.pinpoint-range", 12.0);
-        closeRangeThreshold = plugin.getConfig().getDouble("detection.close-range-threshold", 200.0);
+        pinpointRange = plugin.getConfig().getDouble("detection.pinpoint-range", 20.0);
+        closeRangeThreshold = plugin.getConfig().getDouble("detection.close-range-threshold", 60.0);
         threeRingsDistance = plugin.getConfig().getDouble("detection.ring-thresholds.three-rings", 100.0);
         twoRingsDistance = plugin.getConfig().getDouble("detection.ring-thresholds.two-rings", 300.0);
 
         if (pinpointRange <= 0.0) {
-            plugin.getLogger().warning("detection.pinpoint-range must be greater than 0 - falling back to 12.");
-            pinpointRange = 12.0;
+            plugin.getLogger().warning("detection.pinpoint-range must be greater than 0 - falling back to 20.");
+            pinpointRange = 20.0;
         }
     }
     

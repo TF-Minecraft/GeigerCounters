@@ -85,11 +85,15 @@ detection:
   
   # Within this many blocks of the cache (measured in 3D, depth included)
   # the detector switches to a close reading: the bar and clicks start over
-  # from low and peak on the cache itself, to show where to dig
-  pinpoint-range: 12.0
+  # from low and peak on the cache itself, to show where to dig.
+  # Caches lie up to burial.max-depth under the ground, so keep this well
+  # above that or the close reading barely reaches the surface on slopes.
+  pinpoint-range: 20.0
 
-  # Distance threshold for close/far range colors (blocks)
-  close-range-threshold: 200.0
+  # Distance threshold for close/far range colors (blocks). The particles
+  # turn white over this last stretch, so a large value makes them look
+  # white long before the close reading starts.
+  close-range-threshold: 60.0
   
   # Ring count thresholds - number of particle rings based on distance
   ring-thresholds:
@@ -100,8 +104,10 @@ detection:
 # ====================================
 # Signal bar
 # A boss bar shown while holding a detector. It fills as the player gets
-# closer and peaks when they face their source. Within pinpoint-range it
-# shows closeness to the cache alone.
+# closer and peaks when they face their source. Distance is measured in 3D
+# on a log scale: each halving of the distance fills the same amount, and the
+# bar is full at pinpoint-range. Within pinpoint-range it shows closeness to
+# the cache alone.
 # ====================================
 bar:
   enabled: true
@@ -135,13 +141,14 @@ sound:
   pitch: 1.7
   pitch-variance: 0.15
 
-  # Clicks per second at max-detection-distance and at the source itself.
+  # Clicks per second at max-detection-distance and at pinpoint-range.
+  # Like the bar, the rate climbs on a log scale of the 3D distance.
   # 20 is the ceiling - one click per tick
   min-rate: 0.5
   max-rate: 18.0
 
   # Higher values keep the clicking slow until the player is close,
-  # then ramp hard. 1.0 is a straight line
+  # then ramp hard. 1.0 follows the log scale as it is
   curve: 2.0
 
 

@@ -7,6 +7,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import net.tfminecraft.geigercounters.config.GeigerConfiguration;
+import net.tfminecraft.geigercounters.utils.Closeness;
 
 import java.util.HashMap;
 import java.util.Iterator;
@@ -18,8 +19,10 @@ import java.util.UUID;
 // Boss bar shown while a player holds a detector.
 //
 // It fills as the player closes in and peaks when they face their source, so
-// sweeping round on the spot shows which way to walk. Within pinpoint range
-// it retitles and shows closeness to the cache alone, to find where to dig.
+// sweeping round on the spot shows which way to walk. It fills on a log
+// scale, reaching full at pinpoint range, so it keeps moving on the way in.
+// Within pinpoint range it retitles and shows closeness to the cache alone,
+// to find where to dig.
 // MMOCore owns the action bar, which is why this sits at the top of the screen.
 // ====================================
 public class SignalBar {
@@ -43,7 +46,7 @@ public class SignalBar {
     }
 
     // ====================================
-    // Show or refresh the player's bar for a source <distance> blocks away
+    // Show or refresh the player's bar for a cache <distance> blocks away in 3D
     // ====================================
     public void update(Player player, Location source, double distance) {
         show(player, signal(player.getLocation(), source, distance), TITLE);
@@ -121,8 +124,7 @@ public class SignalBar {
     // Facing away still shows (1 - facing-weight) of the closeness.
     // ====================================
     double signal(Location from, Location source, double distance) {
-        double range = config.getBarRange();
-        double closeness = 1.0 - Math.min(distance, range) / range;
+        double closeness = Closeness.logarithmic(distance, config.getPinpointRange(), config.getBarRange());
         double weight = config.getBarFacingWeight();
         return closeness * ((1.0 - weight) + weight * facing(from, source));
     }

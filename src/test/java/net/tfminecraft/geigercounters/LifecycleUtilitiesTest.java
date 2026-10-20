@@ -194,6 +194,10 @@ public class LifecycleUtilitiesTest {
     assertEquals("§aGreen", Utils.colorize("&aGreen"));
     assertEquals(
         "§x§f§f§0§0§a§aPink §x§f§f§0§0§a§aAgain", Utils.colorize("#ff00aaPink #ff00aaAgain"));
+    // The documented &#RRGGBB form leaves no stray &
+    assertEquals(
+        "§x§a§a§0§0§f§fArcane §x§a§a§0§0§f§fSignal §7- dig",
+        Utils.colorize("#aa00ffArcane &#aa00ffSignal &7- dig"));
     Player player = mock(Player.class);
     Location location = new Location(mock(World.class), 1, 2, 3);
     var event = new GeigerSourceCollectEvent(player, location);

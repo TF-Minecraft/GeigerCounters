@@ -7,19 +7,22 @@ import net.md_5.bungee.api.ChatColor;
 
 public class Utils {
 
+    private static final Pattern HEX_PATTERN = Pattern.compile("&?(#[a-fA-F0-9]{6})");
+
     // Durations like "12h", "90m", "1d", "30s" - or a bare number, read as seconds
     private static final Pattern DURATION_PATTERN = Pattern.compile("(?i)^[ \t]*([0-9]+(?:[.][0-9]+)?)[ \t]*([smhd]?)[ \t]*$");
 
     // Keep the existing legacy text representation, formatting, and exact-string comparisons.
+    // Hex colours may be written #RRGGBB or &#RRGGBB; the & goes with the colour.
     @SuppressWarnings("deprecation")
     public static String colorize(String msg) {
-        Matcher match = Pattern.compile("#[a-fA-F0-9]{6}").matcher(msg);
+        Matcher match = HEX_PATTERN.matcher(msg);
+        StringBuilder colored = new StringBuilder();
         while (match.find()) {
-            String color = msg.substring(match.start(), match.end());
-            msg = msg.replace(color, String.valueOf(ChatColor.of(color)));
-            match = Pattern.compile("#[a-fA-F0-9]{6}").matcher(msg);
+            match.appendReplacement(colored, Matcher.quoteReplacement(String.valueOf(ChatColor.of(match.group(1)))));
         }
-        return ChatColor.translateAlternateColorCodes('&', msg);
+        match.appendTail(colored);
+        return ChatColor.translateAlternateColorCodes('&', colored.toString());
     }
 
     // ====================================

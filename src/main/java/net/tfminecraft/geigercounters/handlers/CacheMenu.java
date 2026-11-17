@@ -44,15 +44,17 @@ public class CacheMenu implements Listener {
     }
 
     // ====================================
-    // Show the cache holding <reward>, which may be null for an empty cache
+    // Show the cache holding <rewards> (empty for an empty cache), centred in
+    // the middle row. Reward entries hold at most one row of items.
     // ====================================
-    public void open(Player player, ItemStack reward) {
+    public void open(Player player, List<ItemStack> rewards) {
         Holder holder = new Holder();
         Inventory inventory = Bukkit.createInventory(holder, SIZE,
             LEGACY.deserialize(config.getMessages().get("player.cache-title")));
         holder.inventory = inventory;
-        if (reward != null) {
-            inventory.setItem(REWARD_SLOT, reward);
+        int first = REWARD_SLOT - rewards.size() / 2;
+        for (int index = 0; index < rewards.size(); index++) {
+            inventory.setItem(first + index, rewards.get(index));
         }
         // Another plugin may refuse the window; the reward is theirs regardless
         if (player.openInventory(inventory) == null) {

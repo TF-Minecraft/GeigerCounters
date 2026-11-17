@@ -49,14 +49,14 @@ class CacheMenuTest {
     when(player.openInventory(any(Inventory.class))).thenReturn(mock(InventoryView.class));
   }
 
-  InventoryHolder open(ItemStack reward) {
+  InventoryHolder open(ItemStack... rewards) {
     ArgumentCaptor<InventoryHolder> holder = ArgumentCaptor.forClass(InventoryHolder.class);
     ArgumentCaptor<Component> title = ArgumentCaptor.forClass(Component.class);
     try (var bukkit = mockStatic(Bukkit.class)) {
       bukkit
           .when(() -> Bukkit.createInventory(any(InventoryHolder.class), eq(27), any(Component.class)))
           .thenReturn(window);
-      menu.open(player, reward);
+      menu.open(player, List.of(rewards));
       bukkit.verify(() -> Bukkit.createInventory(holder.capture(), eq(27), title.capture()));
     }
     assertEquals("Arcane Cache", PlainTextComponentSerializer.plainText().serialize(title.getValue()));
@@ -79,14 +79,39 @@ class CacheMenuTest {
   }
 
   @Test
+  void severalRewardsAreCentredInTheMiddleRow() {
+    ItemStack first = item(false), second = item(false), third = item(false);
+    open(first, second);
+    verify(window).setItem(12, first);
+    verify(window).setItem(13, second);
+    clearInvocations(window, player);
+    open(first, second, third);
+    verify(window).setItem(12, first);
+    verify(window).setItem(13, second);
+    verify(window).setItem(14, third);
+  }
+
+  @Test
+  void aFullRowOfRewardsFillsTheWholeMiddleRow() {
+    ItemStack[] row = new ItemStack[9];
+    for (int index = 0; index < row.length; index++) {
+      row[index] = item(false);
+    }
+    open(row);
+    for (int index = 0; index < row.length; index++) {
+      verify(window).setItem(9 + index, row[index]);
+    }
+  }
+
+  @Test
   void anEmptyCacheStillOpens() {
-    open(null);
+    open();
     verify(window, never()).setItem(anyInt(), any());
   }
 
   @Test
   void whateverIsLeftWhenTheCacheClosesGoesToThePlayer() {
-    InventoryHolder holder = open(null);
+    InventoryHolder holder = open();
     ItemStack left = item(false), air = item(true);
     when(window.getHolder()).thenReturn(holder);
     when(window.getContents()).thenReturn(new ItemStack[] {null, air, left});
@@ -101,7 +126,7 @@ class CacheMenuTest {
 
   @Test
   void otherWindowsAndNonPlayersAreLeftAlone() {
-    InventoryHolder holder = open(null);
+    InventoryHolder holder = open();
     InventoryCloseEvent event = mock(InventoryCloseEvent.class);
     when(event.getInventory()).thenReturn(window);
     when(window.getHolder()).thenReturn(mock(InventoryHolder.class));
@@ -115,7 +140,7 @@ class CacheMenuTest {
 
   @Test
   void openCachesAreHandedBackWhenThePluginStops() {
-    InventoryHolder holder = open(null);
+    InventoryHolder holder = open();
     ItemStack left = item(false);
     when(window.getHolder()).thenReturn(holder);
     when(window.getContents()).thenReturn(new ItemStack[] {left});
@@ -159,7 +184,7 @@ class CacheMenuTest {
 
   @Test
   void dyingWithTheCacheOpenFillsEmptySlotsForGravesAndAddsToTheDrops() {
-    InventoryHolder holder = open(null);
+    InventoryHolder holder = open();
     ItemStack held = item(false), gap = item(true);
     ItemStack first = item(false), second = item(false);
     ItemStack firstCopy = mock(ItemStack.class), secondCopy = mock(ItemStack.class);
@@ -186,7 +211,7 @@ class CacheMenuTest {
     Location at = new Location(world, 1, 2, 3);
     when(player.getWorld()).thenReturn(world);
     when(player.getLocation()).thenReturn(at);
-    InventoryHolder holder = open(null);
+    InventoryHolder holder = open();
     ItemStack fits = item(false), spare = item(false), copy = mock(ItemStack.class);
     when(fits.clone()).thenReturn(copy);
     ItemStack held = item(false);
@@ -202,7 +227,7 @@ class CacheMenuTest {
 
   @Test
   void keptInventoriesKeepTheCacheContentsWithoutDropping() {
-    InventoryHolder holder = open(null);
+    InventoryHolder holder = open();
     ItemStack left = item(false);
     when(pockets.getStorageContents()).thenReturn(new ItemStack[] {null});
     when(window.getHolder()).thenReturn(holder);

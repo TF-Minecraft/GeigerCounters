@@ -223,6 +223,9 @@ drops:
   # Items in each rarity tier
   # Format: "item_path:amount"
   # Example: m.MATERIALS.ARCANE_DUST:5
+  # Join up to 9 items with " + " to give them together as one entry:
+  #   "m.MATERIALS.IGNITIUM:32 + v.iron_ingot:32"
+  # If any item in a joined entry is malformed, the whole entry is skipped.
   lists:
     default:
       tiers:

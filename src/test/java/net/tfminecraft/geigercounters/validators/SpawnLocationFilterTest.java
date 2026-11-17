@@ -227,7 +227,7 @@ class SpawnLocationFilterTest {
     ItemReward item = new ItemReward("m.TEST", 2);
     tier.addItem(item);
     assertFalse(tier.isEmpty());
-    assertEquals(List.of(item), tier.getItems());
+    assertEquals(List.of(List.of(item)), tier.getEntries());
     assertEquals("rare", tier.getTierName());
     assertEquals(4, tier.getWeight());
     assertEquals("m.TEST", item.getOutputItem());

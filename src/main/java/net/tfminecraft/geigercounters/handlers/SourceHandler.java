@@ -27,6 +27,7 @@ import net.tfminecraft.geigercounters.validators.SpawnLocationFilter;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
@@ -464,24 +465,31 @@ public class SourceHandler {
     }
     
     // ====================================
-    // A random reward based on tier weights, or null when there is none
+    // The items of a random entry based on tier weights; empty when there is
+    // none. An item whose path does not resolve is left out.
     // ====================================
-    private ItemStack rollReward(Player player) {
+    private List<ItemStack> rollReward(Player player) {
+        List<ItemStack> rewards = new ArrayList<>();
         List<TierReward> tiers = config.getTierRewards();
         if (tiers.isEmpty()) {
-            return null;
+            return rewards;
         }
         
         // Select a tier based on weights
         TierReward selectedTier = selectRandomTier(tiers);
         if (selectedTier.isEmpty()) {
-            return null;
+            return rewards;
         }
         
-        // Select a random item from the tier
-        List<ItemReward> tierItems = selectedTier.getItems();
-        ItemReward randomItem = tierItems.get(random.nextInt(tierItems.size()));
-        return rewardItem(player, randomItem, selectedTier.getTierName());
+        // Select a random entry from the tier
+        List<List<ItemReward>> entries = selectedTier.getEntries();
+        for (ItemReward reward : entries.get(random.nextInt(entries.size()))) {
+            ItemStack item = rewardItem(player, reward, selectedTier.getTierName());
+            if (item != null) {
+                rewards.add(item);
+            }
+        }
+        return rewards;
     }
     
     // ====================================

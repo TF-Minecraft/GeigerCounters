@@ -251,14 +251,42 @@ class GeigerConfigurationTest {
     var tier = configuration.getTierRewards().getFirst();
     assertEquals("common", tier.getTierName());
     assertEquals(10, tier.getWeight());
-    assertEquals(2, tier.getItems().size());
-    assertEquals("m.APPLE", tier.getItems().getFirst().getOutputItem());
-    assertEquals(2, tier.getItems().getFirst().getOutputAmount());
-    assertEquals("namespace:item", tier.getItems().getLast().getOutputItem());
-    assertEquals(3, tier.getItems().getLast().getOutputAmount());
+    assertEquals(2, tier.getEntries().size());
+    assertEquals("m.APPLE", tier.getEntries().getFirst().getFirst().getOutputItem());
+    assertEquals(2, tier.getEntries().getFirst().getFirst().getOutputAmount());
+    assertEquals("namespace:item", tier.getEntries().getLast().getFirst().getOutputItem());
+    assertEquals(3, tier.getEntries().getLast().getFirst().getOutputAmount());
     load();
     assertEquals(
         1, configuration.getTierRewards().size(), "Reload must replace rather than append rewards");
+  }
+
+  @Test
+  void entriesJoinedWithPlusGiveTheirItemsTogetherAndBrokenOrOversizedOnesAreSkipped() {
+    yaml.set("drops.tier-weights.common", 1);
+    yaml.set(
+        "drops.lists.act.tiers.common",
+        List.of(
+            "m.MATERIALS.IGNITIUM:32 + v.iron_ingot:32",
+            "m.A:1 + broken",
+            "m.A:1 + m.B:x",
+            "m.A:1 +",
+            "+",
+            "m.C:1 ",
+            String.join(" + ", java.util.Collections.nCopies(10, "m.A:1")),
+            String.join("+", java.util.Collections.nCopies(9, "m.B:2"))));
+    yaml.set("drops.active-list", "act");
+    load();
+    var entries = configuration.getTierRewards().getFirst().getEntries();
+    assertEquals(2, entries.size());
+    var bundle = entries.getFirst();
+    assertEquals(2, bundle.size());
+    assertEquals("m.MATERIALS.IGNITIUM", bundle.getFirst().getOutputItem());
+    assertEquals(32, bundle.getFirst().getOutputAmount());
+    assertEquals("v.iron_ingot", bundle.getLast().getOutputItem());
+    assertEquals(32, bundle.getLast().getOutputAmount());
+    assertEquals(9, entries.getLast().size());
+    assertEquals("m.B", entries.getLast().getFirst().getOutputItem());
   }
 
   @Test

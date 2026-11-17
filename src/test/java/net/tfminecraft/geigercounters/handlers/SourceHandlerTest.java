@@ -488,7 +488,7 @@ class SourceHandlerTest {
     verify(player).playSound(any(Location.class), eq(Sound.ENTITY_ITEM_BREAK), eq(1f), eq(1f));
     verify(player).playSound(old, Sound.BLOCK_CHEST_OPEN, 1f, 1f);
     verify(player).spawnParticle(Particle.WITCH, old, 30, 0.4, 0.4, 0.4, 0.0);
-    verify(menu).open(player, null);
+    verify(menu).open(player, List.of());
     assertNull(handler.getSource(hunter));
     assertFalse(handler.isPlacing(hunter));
   }
@@ -537,7 +537,7 @@ class SourceHandlerTest {
     collect(EquipmentSlot.OFF_HAND);
     verify(inventory).setItemInOffHand(null);
     verify(copy).setAmount(4);
-    verify(menu).open(player, copy);
+    verify(menu).open(player, List.of(copy));
     verify(inventory, never()).addItem(copy);
     verify(original, never()).setAmount(anyInt());
   }
@@ -552,7 +552,30 @@ class SourceHandlerTest {
     collect(EquipmentSlot.HAND);
     verify(limits).recordCollection(player);
     verify(inventory, never()).addItem(any(ItemStack.class));
-    verify(menu).open(player, null);
+    verify(menu).open(player, List.of());
+  }
+
+  @Test
+  void aBundledEntryPutsEachItemInTheCacheAndLeavesOutOneThatDoesNotResolve() {
+    TierReward tier = new TierReward("rare", 1);
+    tier.addEntry(
+        List.of(
+            new ItemReward("m.ignitium", 32),
+            new ItemReward("v.missing", 1),
+            new ItemReward("v.iron_ingot", 32)));
+    when(config.getTierRewards()).thenReturn(List.of(tier));
+    ItemStack ignitium = mock(ItemStack.class), ignitiumCopy = mock(ItemStack.class);
+    ItemStack iron = mock(ItemStack.class), ironCopy = mock(ItemStack.class);
+    when(api.getCreator().getItemFromPath("m.ignitium")).thenReturn(ignitium);
+    when(api.getCreator().getItemFromPath("v.iron_ingot")).thenReturn(iron);
+    when(api.getCreator().getItemFromPath("v.missing")).thenReturn(null);
+    when(ignitium.clone()).thenReturn(ignitiumCopy);
+    when(iron.clone()).thenReturn(ironCopy);
+    place();
+    collect(EquipmentSlot.HAND);
+    verify(ignitiumCopy).setAmount(32);
+    verify(ironCopy).setAmount(32);
+    verify(menu).open(player, List.of(ignitiumCopy, ironCopy));
   }
 
   @Test
@@ -561,7 +584,7 @@ class SourceHandlerTest {
     place();
     collect(EquipmentSlot.HAND);
     verify(inventory, times(1)).addItem(any(ItemStack.class));
-    verify(menu).open(player, null);
+    verify(menu).open(player, List.of());
   }
 
   @Test
@@ -665,7 +688,7 @@ class SourceHandlerTest {
     verify(inventory).setItemInOffHand(null);
     verify(world).dropItemNaturally(player.getLocation(), dead);
     verify(world, times(1)).dropItemNaturally(any(Location.class), any(ItemStack.class));
-    verify(menu).open(player, reward);
+    verify(menu).open(player, List.of(reward));
   }
 
   @Test

@@ -405,9 +405,9 @@ public class GeigerConfiguration {
                 // Load items for this tier
                 List<String> tierItems = tiersSection.getStringList(tierName);
                 for (String itemString : tierItems) {
-                    ItemReward item = parseItemReward(itemString);
-                    if (item != null) {
-                        tier.addItem(item);
+                    List<ItemReward> entry = parseRewardEntry(itemString);
+                    if (entry != null) {
+                        tier.addEntry(entry);
                     }
                 }
 
@@ -419,6 +419,34 @@ public class GeigerConfiguration {
         }
 
         plugin.getLogger().info("Loaded " + tierRewards.size() + " reward tiers from drop list '" + activeDropList + "'");
+    }
+
+    // ====================================
+    // One list entry: "item:amount", or several joined with " + " that are
+    // given together. A broken part skips the whole entry, so it never pays
+    // only half of what it lists.
+    // ====================================
+    private List<ItemReward> parseRewardEntry(String entryString) {
+        // -1 keeps empty parts, so a dangling or lone "+" is a broken entry
+        String[] parts = entryString.split("\\+", -1);
+        if (parts.length > TierReward.MAX_ENTRY_ITEMS) {
+            plugin.getLogger().warning("Skipping reward entry with more than " + TierReward.MAX_ENTRY_ITEMS
+                + " items: " + entryString);
+            return null;
+        }
+        List<ItemReward> entry = new ArrayList<>();
+        for (String part : parts) {
+            // A single item is read as written, as before joined entries existed
+            ItemReward item = parseItemReward(parts.length > 1 ? part.trim() : part);
+            if (item == null) {
+                if (parts.length > 1) {
+                    plugin.getLogger().warning("Skipping reward entry with a broken item: " + entryString);
+                }
+                return null;
+            }
+            entry.add(item);
+        }
+        return entry;
     }
 
     private ItemReward parseItemReward(String itemString) {

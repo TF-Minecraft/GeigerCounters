@@ -427,7 +427,8 @@ public class GeigerConfiguration {
     // only half of what it lists.
     // ====================================
     private List<ItemReward> parseRewardEntry(String entryString) {
-        String[] parts = entryString.split("\\+");
+        // -1 keeps empty parts, so a dangling or lone "+" is a broken entry
+        String[] parts = entryString.split("\\+", -1);
         if (parts.length > TierReward.MAX_ENTRY_ITEMS) {
             plugin.getLogger().warning("Skipping reward entry with more than " + TierReward.MAX_ENTRY_ITEMS
                 + " items: " + entryString);
@@ -435,7 +436,8 @@ public class GeigerConfiguration {
         }
         List<ItemReward> entry = new ArrayList<>();
         for (String part : parts) {
-            ItemReward item = parseItemReward(part.trim());
+            // A single item is read as written, as before joined entries existed
+            ItemReward item = parseItemReward(parts.length > 1 ? part.trim() : part);
             if (item == null) {
                 if (parts.length > 1) {
                     plugin.getLogger().warning("Skipping reward entry with a broken item: " + entryString);

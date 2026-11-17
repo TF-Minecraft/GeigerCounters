@@ -270,6 +270,9 @@ class GeigerConfigurationTest {
             "m.MATERIALS.IGNITIUM:32 + v.iron_ingot:32",
             "m.A:1 + broken",
             "m.A:1 + m.B:x",
+            "m.A:1 +",
+            "+",
+            "m.C:1 ",
             String.join(" + ", java.util.Collections.nCopies(10, "m.A:1")),
             String.join("+", java.util.Collections.nCopies(9, "m.B:2"))));
     yaml.set("drops.active-list", "act");
